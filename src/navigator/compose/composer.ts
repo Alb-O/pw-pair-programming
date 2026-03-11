@@ -1,10 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import {
-	parseRangeShorthandEntry,
-	parseSliceEntry,
-	type LineRange,
-} from "./entry_parser";
+import { parseRangeShorthandEntry, parseSliceEntry } from "./entry_parser";
 
 /**
  * Message composer for navigator prompts.
@@ -17,11 +13,39 @@ export type ComposeNavigatorMessageOptions = {
 	onWarning?: (warning: string) => void;
 };
 
+export type ReadNavigatorPreambleOptions = {
+	preambleFile: string;
+	cwd?: string;
+};
+
 export type ReadSliceResult = {
 	start: number;
 	end: number;
 	text: string;
 };
+
+export type ResolvedComposeFileEntry = {
+	kind: "file";
+	rawEntry: string;
+	entryPath: string;
+	filePath: string;
+	content: string;
+};
+
+export type ResolvedComposeSliceEntry = {
+	kind: "slice";
+	rawEntry: string;
+	entryPath: string;
+	filePath: string;
+	start: number;
+	end: number;
+	label: string;
+	content: string;
+};
+
+export type ResolvedComposeEntry =
+	| ResolvedComposeFileEntry
+	| ResolvedComposeSliceEntry;
 
 const normalizeLines = (content: string): string[] => {
 	const lines = content.replace(/\r/g, "").split("\n");
@@ -67,6 +91,19 @@ const resolveEntryPath = (entryPath: string, cwd: string): string => {
 	return path.resolve(cwd, entryPath);
 };
 
+const resolvePreamblePath = (preambleFile: string, cwd: string): string => {
+	if (preambleFile.trim() === "") {
+		throw new Error("composeNavigatorMessage requires preambleFile");
+	}
+
+	const resolvedPreamble = resolveEntryPath(preambleFile, cwd);
+	if (!fs.existsSync(resolvedPreamble)) {
+		throw new Error(`Preamble file not found: ${preambleFile} cwd=${cwd}`);
+	}
+	ensureFilePath(resolvedPreamble, preambleFile, "Preamble file", cwd);
+	return resolvedPreamble;
+};
+
 export const readSlice = (
 	filePath: string,
 	start: number,
@@ -94,34 +131,33 @@ export const readSlice = (
 
 const appendRangeSnippet = (
 	parts: string[],
-	entryPath: string,
-	filePath: string,
-	range: LineRange,
+	entry: ResolvedComposeSliceEntry,
 ): void => {
-	const slice = readSlice(filePath, range.start, range.end);
 	const header =
-		slice.start === slice.end
-			? `[FILE: ${entryPath} | line ${slice.start}]`
-			: `[FILE: ${entryPath} | lines ${slice.start}-${slice.end}]`;
-	parts.push(`\n\n${header}\n${slice.text}`);
+		entry.start === entry.end
+			? `[FILE: ${entry.entryPath} | line ${entry.start}]`
+			: `[FILE: ${entry.entryPath} | lines ${entry.start}-${entry.end}]`;
+	const finalHeader =
+		entry.label === ""
+			? header
+			: entry.start === entry.end
+				? `[FILE: ${entry.entryPath} | line ${entry.start} | ${entry.label}]`
+				: `[FILE: ${entry.entryPath} | lines ${entry.start}-${entry.end} | ${entry.label}]`;
+	parts.push(`\n\n${entry.label === "" ? header : finalHeader}\n${entry.content}`);
 };
 
-export const composeNavigatorMessage = ({
+export const readNavigatorPreamble = ({
 	preambleFile,
+	cwd = process.cwd(),
+}: ReadNavigatorPreambleOptions): string =>
+	fs.readFileSync(resolvePreamblePath(preambleFile, cwd), "utf8");
+
+export const resolveComposeEntries = ({
 	entries,
 	cwd = process.cwd(),
 	onWarning,
-}: ComposeNavigatorMessageOptions): string => {
-	if (preambleFile.trim() === "") {
-		throw new Error("composeNavigatorMessage requires preambleFile");
-	}
-
-	const resolvedPreamble = resolveEntryPath(preambleFile, cwd);
-	if (!fs.existsSync(resolvedPreamble)) {
-		throw new Error(`Preamble file not found: ${preambleFile} cwd=${cwd}`);
-	}
-
-	const parts: string[] = [fs.readFileSync(resolvedPreamble, "utf8")];
+}: Omit<ComposeNavigatorMessageOptions, "preambleFile">): ResolvedComposeEntry[] => {
+	const resolvedEntries: ResolvedComposeEntry[] = [];
 
 	for (const rawEntry of entries) {
 		const entry = rawEntry.trim();
@@ -146,11 +182,16 @@ export const composeNavigatorMessage = ({
 			ensureFilePath(filePath, parsed.pathText, "Slice file", cwd);
 
 			const slice = readSlice(filePath, parsed.start, parsed.end);
-			const header =
-				parsed.label === ""
-					? `[FILE: ${parsed.pathText} | lines ${slice.start}-${slice.end}]`
-					: `[FILE: ${parsed.pathText} | lines ${slice.start}-${slice.end} | ${parsed.label}]`;
-			parts.push(`\n\n${header}\n${slice.text}`);
+			resolvedEntries.push({
+				kind: "slice",
+				rawEntry,
+				entryPath: parsed.pathText,
+				filePath,
+				start: slice.start,
+				end: slice.end,
+				label: parsed.label,
+				content: slice.text,
+			});
 			continue;
 		}
 
@@ -161,8 +202,13 @@ export const composeNavigatorMessage = ({
 
 		if (fs.existsSync(filePath)) {
 			ensureFilePath(filePath, fileText, "File entry", cwd);
-			const content = fs.readFileSync(filePath, "utf8");
-			parts.push(`\n\n[FILE: ${fileText}]\n${content}`);
+			resolvedEntries.push({
+				kind: "file",
+				rawEntry,
+				entryPath: fileText,
+				filePath,
+				content: fs.readFileSync(filePath, "utf8"),
+			});
 			continue;
 		}
 
@@ -182,7 +228,17 @@ export const composeNavigatorMessage = ({
 			);
 
 			for (const range of shorthand.ranges) {
-				appendRangeSnippet(parts, shorthand.pathText, shorthandPath, range);
+				const slice = readSlice(shorthandPath, range.start, range.end);
+				resolvedEntries.push({
+					kind: "slice",
+					rawEntry,
+					entryPath: shorthand.pathText,
+					filePath: shorthandPath,
+					start: slice.start,
+					end: slice.end,
+					label: "",
+					content: slice.text,
+				});
 			}
 			continue;
 		}
@@ -190,6 +246,29 @@ export const composeNavigatorMessage = ({
 		throw new Error(
 			`File not found: ${fileText} cwd=${cwd}. If this was intended as a line range, use 'slice:path:start:end' or shorthand 'path:start-end[,start-end...]'.`,
 		);
+	}
+
+	return resolvedEntries;
+};
+
+export const composeNavigatorMessage = ({
+	preambleFile,
+	entries,
+	cwd = process.cwd(),
+	onWarning,
+}: ComposeNavigatorMessageOptions): string => {
+	const parts: string[] = [readNavigatorPreamble({ preambleFile, cwd })];
+
+	for (const entry of resolveComposeEntries({
+		entries,
+		cwd,
+		onWarning,
+	})) {
+		if (entry.kind === "file") {
+			parts.push(`\n\n[FILE: ${entry.entryPath}]\n${entry.content}`);
+			continue;
+		}
+		appendRangeSnippet(parts, entry);
 	}
 
 	return parts.join("");

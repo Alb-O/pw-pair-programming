@@ -1,7 +1,14 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { composeNavigatorMessage } from "../compose/composer";
+import {
+	buildNavigatorEntriesArchive,
+	formatNavigatorEntriesArchiveNotice,
+} from "../compose/archive";
+import {
+	composeNavigatorMessage,
+	readNavigatorPreamble,
+} from "../compose/composer";
 import {
 	NAVIGATOR_PROJECT_ENV,
 	resolveNavigatorProject,
@@ -11,7 +18,12 @@ import {
 	resolveNavigatorProfile,
 } from "../profile/profile_env";
 import { parseProjectRef, urlInProject } from "../project/project_ref";
-import { attachToNavigator, collectAttachments } from "../browser/attachments";
+import {
+	attachToNavigator,
+	type AttachmentPayload,
+	binaryAttachment,
+	collectAttachments,
+} from "../browser/attachments";
 import {
 	downloadNavigatorArtifact,
 	listNavigatorArtifacts,
@@ -164,6 +176,7 @@ export type NavigatorBriefOptions = NavigatorConnectionOptions & {
 	preambleFile: string;
 	entries: readonly string[];
 	attachFiles?: readonly string[];
+	inlineEntries?: boolean;
 	model?: ModelMode;
 	newChat?: boolean;
 	force?: boolean;
@@ -1064,16 +1077,44 @@ export const runPpCompose = ({
 	});
 
 export const runPpBrief = async (options: NavigatorBriefOptions) => {
-	const message = runPpCompose({
-		preambleFile: options.preambleFile,
-		entries: options.entries,
-	});
+	const shouldArchiveEntries =
+		options.inlineEntries !== true && options.entries.length > 0;
+	let message = shouldArchiveEntries
+		? readNavigatorPreamble({
+				preambleFile: options.preambleFile,
+			})
+		: runPpCompose({
+				preambleFile: options.preambleFile,
+				entries: options.entries,
+				onWarning: options.onWarning,
+			});
 	const attachFiles = normalizeList(options.attachFiles ?? []);
-	if (attachFiles.length === 0) {
+	const attachments: AttachmentPayload[] = [];
+
+	if (shouldArchiveEntries) {
+		const archive = buildNavigatorEntriesArchive({
+			entries: options.entries,
+			onWarning: options.onWarning,
+		});
+		attachments.push(
+			binaryAttachment(archive.name, archive.bytes, "application/gzip"),
+		);
+		message = `${message}${formatNavigatorEntriesArchiveNotice(archive)}`;
+	}
+
+	if (attachFiles.length > 0) {
+		attachments.push(...collectAttachments(attachFiles));
+	}
+
+	if (attachments.length === 0) {
 		return runPpSend({
 			...options,
 			message,
 		});
+	}
+
+	if (attachments.length > 10) {
+		throw new Error("Maximum 10 attachments allowed per command");
 	}
 
 	return withNavigatorSession(options, resolveSendSessionMode(options.newChat), async (page, targetUrl, session) => {
@@ -1104,7 +1145,6 @@ export const runPpBrief = async (options: NavigatorBriefOptions) => {
 			await setModelMode(page, modelToApply);
 		}
 
-		const attachments = collectAttachments(attachFiles);
 		const sent = await attachToNavigator(page, attachments, {
 			prompt: message,
 			send: true,

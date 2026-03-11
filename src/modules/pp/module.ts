@@ -68,7 +68,7 @@ export const PP_COMMAND_USAGE_LINES = [
 	"  history [connection opts] [--last <int>] [--json]",
 	"  attach [connection opts] [<file>...] [--name <name>] [--prompt <text>] [--send] [--wait-for-response] [--timeout <int>] [--poll-ms <int>] [--json]",
 	"  compose --preamble-file <path> [<entry>...]",
-	"  brief [connection opts] --preamble-file <path> [<entry>...] [--attach <path>] [--model <mode>] [--new] [--force] [--no-wait] [--timeout <int>] [--poll-ms <int>] [--json]",
+	"  brief [connection opts] --preamble-file <path> [<entry>...] [--inline-entries] [--attach <path>] [--model <mode>] [--new] [--force] [--no-wait] [--timeout <int>] [--poll-ms <int>] [--json]",
 	"  download [connection opts] [--list] [--index <int>] [--output <path>] [--json]",
 	"  set-model [connection opts] <auto|instant|thinking|pro> [--json]",
 	"  new [connection opts] [--model <mode>] [--json]",
@@ -723,6 +723,8 @@ const parsePpBriefCommand = (
 				command.option("--preamble-file <path>");
 				command.option("--entries <csv>");
 				command.option("--entries-file <path>");
+				command.option("--inline-entries");
+				command.option("--archive-entries");
 				command.option(
 					"--attach <path>",
 					"attachment file path (repeatable)",
@@ -751,6 +753,20 @@ const parsePpBriefCommand = (
 			`pp brief cannot combine --new with --no-navigate\n${usage}`,
 		);
 	}
+	if (
+		readBooleanOption({
+			options,
+			key: "inlineEntries",
+		}) &&
+		readBooleanOption({
+			options,
+			key: "archiveEntries",
+		})
+	) {
+		throw new Error(
+			`pp brief cannot combine --inline-entries with --archive-entries\n${usage}`,
+		);
+	}
 	return {
 		kind: "pp-brief",
 		options: {
@@ -762,6 +778,10 @@ const parsePpBriefCommand = (
 				usage,
 			}),
 			entries: parseEntries({ options, positionals }),
+			inlineEntries: readBooleanOption({
+				options,
+				key: "inlineEntries",
+			}),
 			attachFiles: parseStringListOption({
 				options,
 				key: "attach",

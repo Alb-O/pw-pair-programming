@@ -4,10 +4,23 @@
  */
 export {
 	composeNavigatorMessage,
+	readNavigatorPreamble,
+	resolveComposeEntries,
 	readSlice,
 	type ComposeNavigatorMessageOptions,
+	type ReadNavigatorPreambleOptions,
 	type ReadSliceResult,
+	type ResolvedComposeEntry,
+	type ResolvedComposeFileEntry,
+	type ResolvedComposeSliceEntry,
 } from "./compose/composer";
+export {
+	buildNavigatorEntriesArchive,
+	formatNavigatorEntriesArchiveNotice,
+	type BuildNavigatorEntriesArchiveOptions,
+	type NavigatorEntriesArchive,
+	type NavigatorEntriesArchiveManifestEntry,
+} from "./compose/archive";
 export {
 	parseRangeShorthandEntry,
 	parseSliceEntry,

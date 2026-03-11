@@ -42,6 +42,10 @@ pp new --profile "$PP_PROFILE"
 pp brief --profile "$PP_PROFILE" --preamble-file ./docs/preamble.md src/cli.ts src/navigator/runtime/cli_runner.ts:1-180
 # compose + brief with attachment(s) in same send
 pp brief --profile "$PP_PROFILE" --preamble-file ./docs/preamble.md src/cli.ts --attach ./artifacts/screenshot.png
+# brief defaults to uploading selected entries as a tar.gz attachment
+pp brief --profile "$PP_PROFILE" --preamble-file ./docs/preamble.md src/cli.ts src/navigator/runtime/cli_runner.ts:1-180
+# opt back into inline entry pasting
+pp brief --profile "$PP_PROFILE" --preamble-file ./docs/preamble.md --inline-entries src/cli.ts
 # attach files + stdin payload and wait for response
 cat note.md | pp attach --profile "$PP_PROFILE" a.png --name note.md --send --wait-for-response
 # paste stdin as raw composer text (not attachment)

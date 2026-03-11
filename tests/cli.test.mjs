@@ -266,6 +266,7 @@ test("parseArgs parses pp brief positional entries and flags", () => {
 		"--preamble-file",
 		"docs/preamble.md",
 		"src/cli.ts",
+		"--inline-entries",
 		"--attach",
 		"a.png",
 		"--attach",
@@ -280,11 +281,27 @@ test("parseArgs parses pp brief positional entries and flags", () => {
 
 	assert.equal(parsed.kind, "pp-brief");
 	assert.deepEqual(parsed.options.entries, ["src/cli.ts"]);
+	assert.equal(parsed.options.inlineEntries, true);
 	assert.deepEqual(parsed.options.attachFiles, ["a.png", "b.jpg"]);
 	assert.equal(parsed.options.model, "pro");
 	assert.equal(parsed.options.newChat, true);
 	assert.equal(parsed.options.force, true);
 	assert.equal(parsed.options.timeoutMs, 45000);
+});
+
+test("parseArgs rejects conflicting pp brief entry mode flags", () => {
+	assert.throws(
+		() =>
+			parseArgs([
+				"brief",
+				"--preamble-file",
+				"docs/preamble.md",
+				"--inline-entries",
+				"--archive-entries",
+				"src/cli.ts",
+			]),
+		/cannot combine --inline-entries with --archive-entries/,
+	);
 });
 
 test("parseArgs parses pp attach positional files and stdin naming", () => {

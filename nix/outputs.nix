@@ -5,17 +5,12 @@ let
 in
 {
   outputs = {
-    pp-source = shared.sparseSource;
-    pp-base = shared.playwrightBase;
     pp = shared.ppCli;
     pp-cli = shared.ppCli;
     pp-automation = shared.ppAutomationCli;
     pp-automation-cli = shared.ppAutomationCli;
 
-    pp-core = shared.mkPreparedPlaywright {
-      name = "pp-core-built";
-      verifyE2e = false;
-    };
+    pp-core = shared.pwRuntime;
 
     pp-e2e = pkgs.writeShellApplication {
       name = "pp-e2e";
@@ -25,12 +20,8 @@ in
       ];
       text = ''
         set -euo pipefail
-        workdir="$(mktemp -d)"
-
-        ${shared.preparePlaywrightTreeScript "$workdir/playwright"}
-
         NODE_PATH=${shared.workspaceAutomationCli}/node_modules \
-          node ${shared.workspaceAutomationCli}/dist/automation_cli.js build-and-e2e --playwright-root "$workdir/playwright" --chromium-bin "$(command -v chromium)" --skip-install
+          node ${shared.workspaceAutomationCli}/dist/automation_cli.js run-e2e --playwright-root ${shared.pwRuntime} --chromium-bin "$(command -v chromium)"
       '';
     };
 
@@ -45,13 +36,8 @@ in
         workdir="$(mktemp -d)"
         outdir="$workdir/demos"
 
-        ${shared.preparePlaywrightTreeScript "$workdir/playwright"}
-
         NODE_PATH=${shared.workspaceAutomationCli}/node_modules \
-          node ${shared.workspaceAutomationCli}/dist/automation_cli.js build-core --playwright-root "$workdir/playwright" --skip-install
-
-        NODE_PATH=${shared.workspaceAutomationCli}/node_modules \
-          node ${shared.workspaceAutomationCli}/dist/automation_cli.js run-demos --playwright-root "$workdir/playwright" --chromium-bin "$(command -v chromium)" --output-dir "$outdir"
+          node ${shared.workspaceAutomationCli}/dist/automation_cli.js run-demos --playwright-root ${shared.pwRuntime} --chromium-bin "$(command -v chromium)" --output-dir "$outdir"
 
         echo "demo artifacts: $outdir"
         cat "$outdir/summary.json"

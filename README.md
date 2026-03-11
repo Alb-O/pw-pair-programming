@@ -1,10 +1,10 @@
 # PP
 
-Pair programming CLI for ChatGPT navigation and sparse Playwright automation.
+Pair programming CLI for ChatGPT navigation and Playwright automation.
 
 ## Ecosystem Modules
 
-- `automation` module: Playwright core build plus e2e/demo commands
+- `automation` module: `pw` runtime plus e2e/demo commands
 - `pp` module: ChatGPT navigation loop plus auth listener
 - `src/cli.ts` is the single CLI entrypoint for both command sets
 

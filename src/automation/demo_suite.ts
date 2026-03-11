@@ -1,5 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+	requirePlaywrightChromium,
+	type PlaywrightChromium,
+} from "./pw_core";
 
 type RunDemoSuiteOptions = {
 	playwrightRoot: string;
@@ -35,14 +39,6 @@ type PlaywrightBrowser = {
 		};
 	}) => Promise<PlaywrightPage>;
 	close: () => Promise<void>;
-};
-
-type PlaywrightChromium = {
-	launch: (options: {
-		executablePath: string;
-		headless: boolean;
-		args: readonly string[];
-	}) => Promise<PlaywrightBrowser>;
 };
 
 const BROWSER_ARGS = [
@@ -91,15 +87,6 @@ const ROUTE_HTML: Record<string, string> = {
 		"<!doctype html><html><head><title>ops-contact</title></head><body><h1>Contact</h1><p>support desk</p></body></html>",
 };
 
-const requireChromium = (playwrightRoot: string): PlaywrightChromium => {
-	const modulePath = path.join(playwrightRoot, "packages/playwright-core");
-	const loaded = require(modulePath) as { chromium?: PlaywrightChromium };
-	if (loaded.chromium === undefined) {
-		throw new Error(`playwright chromium export missing in ${modulePath}`);
-	}
-	return loaded.chromium;
-};
-
 const collectCrawlResults = async (
 	browser: PlaywrightBrowser,
 	routes: readonly string[],
@@ -128,7 +115,7 @@ const runDemoSuite = async ({
 	chromiumBin,
 	outputDir,
 }: RunDemoSuiteOptions): Promise<string> => {
-	const chromium = requireChromium(playwrightRoot);
+	const chromium = requirePlaywrightChromium(playwrightRoot);
 	const resolvedOutput = path.resolve(outputDir);
 	fs.mkdirSync(resolvedOutput, { recursive: true });
 

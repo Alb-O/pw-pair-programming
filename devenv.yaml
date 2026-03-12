@@ -20,6 +20,9 @@ inputs:
   poly-local-inputs:
     url: github:Alb-O/poly-local-inputs
     flake: false
+  pw:
+    url: github:Alb-O/pw
+    flake: false
 imports:
   - poly-instructions-composer
   - poly-docs-env

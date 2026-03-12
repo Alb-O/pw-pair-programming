@@ -1,7 +1,13 @@
-{ pkgs, ... }:
+{
+  inputs,
+  pkgs,
+  ...
+}:
 
 let
-  shared = import ./shared.nix { inherit pkgs; };
+  shared = import ./shared.nix {
+    inherit inputs pkgs;
+  };
 in
 {
   outputs = {

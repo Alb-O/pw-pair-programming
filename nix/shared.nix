@@ -1,4 +1,5 @@
 {
+  inputs,
   pkgs,
   ...
 }:
@@ -6,7 +7,7 @@ let
   fs = pkgs.lib.fileset;
   node = pkgs.nodejs_22;
   workspaceRoot = ../.;
-  pwShared = import ../../pw/nix/shared.nix { inherit pkgs; };
+  pwShared = import (inputs.pw + "/nix/shared.nix") { inherit pkgs; };
   pwCli = pwShared.pwCli;
   pwRuntime = pwShared.workspaceCli;
   fontsConf = pkgs.makeFontsConf {

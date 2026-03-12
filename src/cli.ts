@@ -1,5 +1,4 @@
 import {
-	AUTOMATION_COMMAND_USAGE_LINES,
 	parseAutomationCommand,
 	runAutomationCommand,
 	type AutomationCommand,
@@ -15,21 +14,7 @@ import {
 
 type Command = AutomationCommand | PpModuleCommand;
 
-const WORKSPACE_NAME = "pp";
-
-const USAGE = [
-	`usage: ${WORKSPACE_NAME} <command> [options]`,
-	"",
-	"automation commands:",
-	...AUTOMATION_COMMAND_USAGE_LINES,
-	"",
-	"pair programming commands:",
-	...PP_COMMAND_USAGE_LINES,
-	"  auth-listen [--host <ip>] [--port <int>] [--auth-dir <path>] [--token <hex>]",
-	"",
-	"connection opts:",
-	...CONNECTION_USAGE_LINES,
-].join("\n");
+const USAGE = PP_USAGE;
 
 const parseArgs = (argv: readonly string[]): Command => {
 	if (argv.length === 0) {

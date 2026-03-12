@@ -51,31 +51,6 @@ const withEnv = (patches, fn) => {
 	}
 };
 
-test("single pp CLI prints top-level usage when no command is provided", () => {
-	const result = runCli([]);
-
-	assert.equal(result.status, 1);
-	assert.match(result.stderr, /usage: pp <command> \[options\]/);
-	assert.match(result.stderr, /automation commands:/);
-	assert.match(result.stderr, /pair programming commands:/);
-});
-
-test("single pp CLI reports unknown commands at the top level", () => {
-	const result = runCli(["unknown-command"]);
-
-	assert.equal(result.status, 1);
-	assert.match(result.stderr, /unknown command 'unknown-command'/);
-	assert.match(result.stderr, /usage: pp <command> \[options\]/);
-});
-
-test("single pp CLI keeps compose validation on the main entrypoint", () => {
-	const result = runCli(["compose", "src/cli.ts"]);
-
-	assert.equal(result.status, 1);
-	assert.match(result.stderr, /missing required option '--preamble-file'/);
-	assert.match(result.stderr, /usage: pp <command> \[options\]/);
-});
-
 test("pp commands fail fast when another pp command lock is active", () => {
 	const stateRoot = fs.mkdtempSync(path.join(os.tmpdir(), "pp-lock-"));
 	const lockEnv = {

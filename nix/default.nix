@@ -7,10 +7,11 @@ in
   outputs = {
     pp = shared.ppCli;
     pp-cli = shared.ppCli;
+    pp-core = shared.workspacePpCli;
+    pp-cli-built = shared.workspacePpCli;
     pp-automation = shared.ppAutomationCli;
     pp-automation-cli = shared.ppAutomationCli;
-
-    pp-core = shared.pwRuntime;
+    pw-core = shared.pwRuntime;
 
     pp-e2e = pkgs.writeShellApplication {
       name = "pp-e2e";

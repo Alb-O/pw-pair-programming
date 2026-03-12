@@ -19,6 +19,7 @@ in
 
   packages = [
     shared.node
+    shared.ppCli
     pkgs.typescript
     pkgs.chromium
     pkgs.fontconfig
@@ -38,6 +39,7 @@ in
 
   enterShell = ''
     echo "Run: npm install"
+    echo "Run: pp"
     echo "Run: check"
     echo "Run: test"
     echo "Run: test-playwright"

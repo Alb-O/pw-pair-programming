@@ -2,6 +2,13 @@
 
 Pair programming CLI for ChatGPT navigation and Playwright automation.
 
+The repo also exposes reusable packaged runtimes through devenv/Nix:
+
+- `pp-core`: built package root with `dist/` and bundled `node_modules` for the main `pp` CLI
+- `pp-cli`: runnable wrapper binary for `dist/cli.js`
+- `pp-cli-built`: alias for the built `pp` package root
+- `pw-core`: built `pw` runtime consumed by the automation module
+
 ## Ecosystem Modules
 
 - `automation` module: `pw` runtime plus e2e/demo commands

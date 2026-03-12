@@ -32,23 +32,11 @@ export type RuntimeContext = {
 	pages: () => RuntimePage[];
 	newPage: () => Promise<RuntimePage>;
 	close: () => Promise<void>;
-	addCookies?: (
-		cookies: Array<{
-			name: string;
-			value: string;
-			domain: string;
-			path: string;
-			expires: number;
-			httpOnly: boolean;
-			secure: boolean;
-			sameSite: "Strict" | "Lax" | "None";
-		}>,
-	) => Promise<void>;
 };
 
 export type RuntimeBrowser = {
 	contexts: () => RuntimeContext[];
-	newContext: (options?: { storageState?: string }) => Promise<RuntimeContext>;
+	newContext: () => Promise<RuntimeContext>;
 	close: () => Promise<void>;
 	newBrowserCDPSession?: () => Promise<{
 		send: (
@@ -107,7 +95,6 @@ export type OpenChatgptSessionOptions = {
 	userDataDir?: string;
 	profile?: string;
 	session?: string;
-	authFile?: string;
 	headless?: boolean;
 	targetUrl?: string;
 	navigate?: boolean;

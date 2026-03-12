@@ -25,7 +25,6 @@ const baseConnection = {
 	chromiumBin: undefined,
 	cdpUrl: undefined,
 	userDataDir: undefined,
-	authFile: undefined,
 	headless: true,
 	chatUrl: "https://chatgpt.com",
 	project: undefined,
@@ -340,18 +339,6 @@ test("resolvePpCommandLockPath scopes locks per project and profile context", ()
 		...baseConnection,
 		chromiumLaunchProfile: "strict",
 	});
-	const authProjectALockPath = resolvePpCommandLockPath({
-		...baseConnection,
-		authFile: "/tmp/pp-auth-a.json",
-		project: "g-p-project-a",
-		projectSource: "option",
-	});
-	const authProjectBLockPath = resolvePpCommandLockPath({
-		...baseConnection,
-		authFile: "/tmp/pp-auth-a.json",
-		project: "g-p-project-b",
-		projectSource: "option",
-	});
 
 	assert.equal(
 		resolvePpCommandLockPath({
@@ -368,7 +355,6 @@ test("resolvePpCommandLockPath scopes locks per project and profile context", ()
 	assert.notEqual(defaultLockPath, sessionALockPath);
 	assert.notEqual(sessionALockPath, sessionBLockPath);
 	assert.notEqual(cdpProjectALockPath, cdpProjectBLockPath);
-	assert.notEqual(authProjectALockPath, authProjectBLockPath);
 	assert.notEqual(defaultLockPath, strictChromiumProfileLockPath);
 	assert.equal(cdpProjectALockPath, cdpCanonicalProjectLockPath);
 });

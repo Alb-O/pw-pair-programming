@@ -97,7 +97,6 @@ export type NavigatorConnectionOptions = {
 	userDataDir?: string;
 	profile?: string;
 	session?: string;
-	authFile?: string;
 	headless: boolean;
 	chatUrl: string;
 	project?: string;
@@ -259,16 +258,13 @@ const normalizeList = (items: readonly string[]): string[] =>
 const normalizedScopeValue = (value?: string): string | null =>
 	isNonEmpty(value) ? value.trim() : null;
 
-type LockSessionKind = "managed-profile" | "cdp" | "auth-file";
+type LockSessionKind = "managed-profile" | "cdp";
 
 const resolveLockSessionKind = (
 	connection: NavigatorConnectionOptions,
 ): LockSessionKind => {
 	if (isNonEmpty(connection.cdpUrl)) {
 		return "cdp";
-	}
-	if (isNonEmpty(connection.authFile)) {
-		return "auth-file";
 	}
 	return "managed-profile";
 };
@@ -318,9 +314,6 @@ const resolveLockScopeConnection = (
 				? resolveConnectionChromiumLaunchProfile(connection)
 				: null,
 		cdpUrl: normalizedScopeValue(connection.cdpUrl),
-		authFile: isNonEmpty(connection.authFile)
-			? path.resolve(connection.authFile)
-			: null,
 		userDataDir: isNonEmpty(connection.userDataDir)
 			? path.resolve(connection.userDataDir)
 			: null,
@@ -387,8 +380,7 @@ const connectionUsesManagedProfile = (
 	connection: NavigatorConnectionOptions,
 ): boolean =>
 	resolveConnectionBrowser(connection) === "chromium" &&
-	!isNonEmpty(connection.cdpUrl) &&
-	!isNonEmpty(connection.authFile);
+	!isNonEmpty(connection.cdpUrl);
 
 const resolveManagedLaunchIdentity = (
 	connection: NavigatorConnectionOptions,
@@ -831,7 +823,6 @@ const withNavigatorSession = async <T>(
 				userDataDir: connection.userDataDir,
 				profile: connection.profile,
 				session: connection.session,
-				authFile: connection.authFile,
 				headless: connection.headless,
 				targetUrl: openTargetUrl,
 				navigate: shouldNavigate(connection, mode),
@@ -1347,11 +1338,10 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 					options.chromiumLaunchProfile ??
 					NAVIGATOR_DEFAULT_CHROMIUM_LAUNCH_PROFILE,
 				cdp_url: options.cdpUrl ?? null,
-				user_data_dir: options.userDataDir ?? null,
-				profile: options.profile ?? null,
-				session: options.session ?? null,
-				auth_file: options.authFile ?? null,
-				headless: options.headless,
+					user_data_dir: options.userDataDir ?? null,
+					profile: options.profile ?? null,
+					session: options.session ?? null,
+					headless: options.headless,
 				chat_url: options.chatUrl,
 				target_url: targetUrl,
 				no_navigate: options.noNavigate === true,

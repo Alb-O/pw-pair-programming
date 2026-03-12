@@ -12,7 +12,7 @@ The repo also exposes reusable packaged runtimes through devenv/Nix:
 ## Ecosystem Modules
 
 - `automation` module: `pw` runtime plus e2e/demo commands
-- `pp` module: ChatGPT navigation loop plus auth listener
+- `pp` module: ChatGPT navigation loop on persistent Playwright-style profiles/sessions
 - `src/cli.ts` is the single CLI entrypoint for both command sets
 
 ## Commands
@@ -34,6 +34,12 @@ export PP_CHATGPT_PROJECT=g-p-abc123
 export PP_PROFILE=chatgpt-profile
 export PP_BROWSER=chromium
 export PP_PROFILE_DIR=${XDG_STATE_HOME:-$HOME/.local/state}/pp/profiles/${PP_PROFILE}
+
+# log in once with a persistent Playwright profile
+pw-cli open https://chatgpt.com --headed --persistent --profile "$PP_PROFILE_DIR"
+# optional: import/export storage state through Playwright CLI against that profile
+pw-cli state-save ./chatgpt.state.json
+pw-cli state-load ./chatgpt.state.json
 
 # one-shot send + wait from CLI (logged-in profile)
 pp send --profile "$PP_PROFILE" "Reply with PP_OK"
@@ -58,12 +64,8 @@ cat note.md | pp attach --profile "$PP_PROFILE" a.png --name note.md --send --wa
 # paste stdin as raw composer text (not attachment)
 printf "quick note" | pp paste --profile "$PP_PROFILE" --send --clear
 
-# run one-shot send with exported storage-state auth file (no profile dir)
-pp send --auth-file ${XDG_STATE_HOME:-$HOME/.local/state}/pp/auth/chatgpt_com.json "Reply with PP_OK"
 # show isolation/session metadata
 pp isolate --profile "$PP_PROFILE" --json
-# run auth listener for extension cookie export
-pp auth-listen
 # run opt-in live roundtrip spec against chatgpt.com (requires logged-in profile)
 PP_CHATGPT_LIVE=1 PP_CHATGPT_PROFILE_DIR="$PP_PROFILE_DIR" npm run test:playwright:navigator -- chatgpt_live_roundtrip.spec.ts
 ```

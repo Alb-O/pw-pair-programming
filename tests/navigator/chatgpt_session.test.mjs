@@ -11,12 +11,8 @@ const {
 	pickSessionPage,
 	detectChromiumBin,
 	detectFirefoxBin,
-	shouldReloadTargetAfterAuthBootstrap,
 	shouldNavigateToTargetUrl,
 } = require("../../dist/navigator/runtime/chatgpt_session.js");
-const {
-	resolveDefaultAuthFile,
-} = require("../../dist/navigator/runtime/chatgpt_session/auth_bootstrap.js");
 const {
 	ensureComposerStartupSettled,
 } = require("../../dist/navigator/runtime/chatgpt_session/page_selection.js");
@@ -269,54 +265,6 @@ test("openChatgptSession rejects cdpUrl when browser is firefox", async () => {
 	);
 });
 
-test("resolveDefaultAuthFile resolves host auth file in state root", () => {
-	withTempBinDir((dir) => {
-		const file = path.join(dir, "xdg-state", "pp", "auth", "chatgpt_com.json");
-		fs.mkdirSync(path.dirname(file), { recursive: true });
-		fs.writeFileSync(file, '{"cookies":[]}', "utf8");
-
-		const resolved = resolveDefaultAuthFile({
-			targetUrl: "https://chatgpt.com/g/g-p-abc/project",
-			homeDir: dir,
-			env: {
-				XDG_STATE_HOME: path.join(dir, "xdg-state"),
-			},
-		});
-
-		assert.equal(resolved, file);
-	});
-});
-
-test("resolveDefaultAuthFile prefers session-scoped auth file before legacy root", () => {
-	withTempBinDir((dir) => {
-		const stateRoot = path.join(dir, "xdg-state");
-		const legacyFile = path.join(stateRoot, "pp", "auth", "chatgpt_com.json");
-		const sessionFile = path.join(
-			stateRoot,
-			"pp",
-			"auth",
-			"sessions",
-			"team-a",
-			"chatgpt_com.json",
-		);
-		fs.mkdirSync(path.dirname(legacyFile), { recursive: true });
-		fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
-		fs.writeFileSync(legacyFile, '{"cookies":[{"name":"legacy"}]}', "utf8");
-		fs.writeFileSync(sessionFile, '{"cookies":[{"name":"session"}]}', "utf8");
-
-		const resolved = resolveDefaultAuthFile({
-			targetUrl: "https://chatgpt.com/g/g-p-abc/project",
-			session: "team-a",
-			homeDir: dir,
-			env: {
-				XDG_STATE_HOME: stateRoot,
-			},
-		});
-
-		assert.equal(resolved, sessionFile);
-	});
-});
-
 test("shouldNavigateToTargetUrl suppresses redundant navigation", () => {
 	assert.equal(
 		shouldNavigateToTargetUrl({
@@ -406,45 +354,6 @@ test("shouldNavigateToTargetUrl still navigates across different non-project url
 			navigate: false,
 			currentUrl: "https://chatgpt.com/g/g-p-demo/c/old",
 			targetUrl: "https://chatgpt.com/g/g-p-demo/c/new",
-		}),
-		false,
-	);
-});
-
-test("shouldReloadTargetAfterAuthBootstrap only reloads same target url when auth cookies were applied", () => {
-	assert.equal(
-		shouldReloadTargetAfterAuthBootstrap({
-			navigate: true,
-			currentUrl: "https://chatgpt.com/g/g-p-demo/project",
-			targetUrl: "https://chatgpt.com/g/g-p-demo/project",
-			authBootstrapApplied: true,
-		}),
-		true,
-	);
-	assert.equal(
-		shouldReloadTargetAfterAuthBootstrap({
-			navigate: true,
-			currentUrl: "https://chatgpt.com/g/g-p-demo/c/abc123",
-			targetUrl: "https://chatgpt.com/g/g-p-demo/project",
-			authBootstrapApplied: true,
-		}),
-		false,
-	);
-	assert.equal(
-		shouldReloadTargetAfterAuthBootstrap({
-			navigate: false,
-			currentUrl: "https://chatgpt.com/g/g-p-demo/project",
-			targetUrl: "https://chatgpt.com/g/g-p-demo/project",
-			authBootstrapApplied: true,
-		}),
-		false,
-	);
-	assert.equal(
-		shouldReloadTargetAfterAuthBootstrap({
-			navigate: true,
-			currentUrl: "https://chatgpt.com/g/g-p-demo/project",
-			targetUrl: "https://chatgpt.com/g/g-p-demo/project",
-			authBootstrapApplied: false,
 		}),
 		false,
 	);

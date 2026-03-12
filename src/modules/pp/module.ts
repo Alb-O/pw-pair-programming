@@ -9,7 +9,6 @@ import {
 	requireNoPositionals,
 	requireOption,
 } from "../../ecosystem/argv";
-import { runAuthListener } from "../../navigator/auth_export/listener";
 import type { ModelMode } from "../../navigator/browser/session";
 import {
 	NAVIGATOR_BROWSER_ENV,
@@ -63,7 +62,7 @@ import {
 /**
  * PP module command surface and runtime dispatch.
  *
- * This module owns chatgpt navigation commands and auth export listener flows.
+ * This module owns chatgpt navigation commands and runtime dispatch.
  */
 export const PP_COMMAND_USAGE_LINES = [
 	"  send [connection opts] [<message>] [--file <path>] [--model <mode>] [--new] [--force] [--echo-message] [--no-wait] [--timeout <int>] [--poll-ms <int>] [--json]",
@@ -82,7 +81,7 @@ export const PP_COMMAND_USAGE_LINES = [
 ] as const;
 
 export const CONNECTION_USAGE_LINES = [
-	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--session <name>] [--auth-file <path>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
+	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--session <name>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
 	`  default project source: $${NAVIGATOR_PROJECT_ENV} when --project is not provided`,
 	`  default profile source: $${NAVIGATOR_PROFILE_ENV} when --user-data-dir and --profile are not provided`,
 	`  default session source: $${NAVIGATOR_SESSION_ENV} when --session is not provided`,
@@ -95,7 +94,6 @@ export const PP_USAGE = [
 	"",
 	"pair programming commands:",
 	...PP_COMMAND_USAGE_LINES,
-	"  auth-listen [--host <ip>] [--port <int>] [--auth-dir <path>] [--session <name>] [--token <hex>]",
 	"",
 	"connection opts:",
 	...CONNECTION_USAGE_LINES,
@@ -177,15 +175,6 @@ export type PpIsolateCommand = {
 	json: boolean;
 };
 
-export type AuthListenCommand = {
-	kind: "auth-listen";
-	host: string;
-	port: number;
-	authDir?: string;
-	session?: string;
-	token?: string;
-};
-
 export type PpSubcommand =
 	| PpSendCommand
 	| PpWaitCommand
@@ -201,7 +190,7 @@ export type PpSubcommand =
 	| PpPasteCommand
 	| PpIsolateCommand;
 
-export type PpModuleCommand = PpSubcommand | AuthListenCommand;
+export type PpModuleCommand = PpSubcommand;
 
 const applyConnectionOptions = (command: Command): void => {
 	command.option("--browser <chromium|firefox>");
@@ -211,7 +200,6 @@ const applyConnectionOptions = (command: Command): void => {
 	command.option("--user-data-dir <path>");
 	command.option("--profile <name>");
 	command.option("--session <name>");
-	command.option("--auth-file <path>");
 	command.option("--chat-url <url>");
 	command.option("--project <g-p-id-or-url>");
 	command.option("--headless");
@@ -398,10 +386,6 @@ const parseNavigatorConnection = ({
 		userDataDir: explicitUserDataDir,
 		profile: profileBinding?.profile,
 		session: sessionBinding?.session,
-		authFile: readStringOption({
-			options,
-			key: "authFile",
-		}),
 		headless: readBooleanOption({
 			options,
 			key: "headless",
@@ -1101,66 +1085,11 @@ const parsePpSubcommand = (
 	}
 };
 
-const parseAuthListenerCommand = (
-	argv: readonly string[],
-	usage: string,
-): AuthListenCommand => {
-	const { options, positionals } = parseWithCommander({
-		argv,
-		binaryName: "auth-listen",
-		usage,
-		configure: (command) => {
-			command.option("--host <ip>");
-			command.option("--port <int>");
-			command.option("--auth-dir <path>");
-			command.option("--session <name>");
-			command.option("--token <hex>");
-		},
-	});
-	requireNoPositionals({
-		positionals,
-		context: "auth-listen",
-		usage,
-	});
-	return {
-		kind: "auth-listen",
-		host:
-			readStringOption({
-				options,
-				key: "host",
-			}) ?? "127.0.0.1",
-		port:
-			parseIntOption({
-				options,
-				key: "port",
-				flag: "--port",
-				usage,
-			}) ?? 9271,
-		authDir: readStringOption({
-			options,
-			key: "authDir",
-		}),
-		session: resolveNavigatorSession({
-			session: readStringOption({
-				options,
-				key: "session",
-			}),
-		})?.session,
-		token: readStringOption({
-			options,
-			key: "token",
-		}),
-	};
-};
-
 export const parsePpModuleCommand = (
 	argv: readonly string[],
 	usage: string,
 ): PpModuleCommand | undefined => {
 	const commandName = argv[0];
-	if (commandName === "auth-listen") {
-		return parseAuthListenerCommand(argv.slice(1), usage);
-	}
 	if (commandName !== undefined && commandName !== "") {
 		try {
 			return parsePpSubcommand(argv, usage);
@@ -1348,18 +1277,6 @@ const runPpSubcommand = async (command: PpSubcommand): Promise<number> => {
 
 export const runPpModuleCommand = async (
 	command: PpModuleCommand,
-): Promise<number> => {
-	if (command.kind === "auth-listen") {
-		await runAuthListener({
-			host: command.host,
-			port: command.port,
-			authDir: command.authDir,
-			session: command.session,
-			token: command.token,
-		});
-		return 0;
-	}
-	return runPpSubcommand(command);
-};
+): Promise<number> => runPpSubcommand(command);
 
 export const parsePpCommand = parsePpModuleCommand;

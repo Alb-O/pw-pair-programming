@@ -454,61 +454,18 @@ test("pp send fails before browser launch when message is missing", () => {
 	);
 });
 
-test("auth-listen validates integer port", () => {
-	const result = runCli(["auth-listen", "--port", "not-a-number"]);
+test("legacy auth-listen command is rejected", () => {
+	const result = runCli(["auth-listen"]);
 
 	assert.equal(result.status, 1);
-	assert.match(result.stderr, /option '--port' must be an integer/);
+	assert.match(result.stderr, /unknown command 'auth-listen'/);
 });
 
-test("parseArgs parses auth-listen session binding", () => {
-	const parsed = parseArgs(["auth-listen", "--session", "team-a"]);
-
-	assert.equal(parsed.kind, "auth-listen");
-	assert.equal(parsed.session, "team-a");
-});
-
-test("pp send rejects auth-file with user-data-dir", () => {
-	const result = runCli(["send",
-		"hello",
-		"--auth-file",
-		"/tmp/auth.json",
-		"--user-data-dir",
-		"/tmp/profile",
-	]);
+test("pp send rejects removed --auth-file option", () => {
+	const result = runCli(["send", "hello", "--auth-file", "/tmp/auth.json"]);
 
 	assert.equal(result.status, 1);
-	assert.match(
-		result.stderr,
-		/auth file cannot be combined with userDataDir; choose exactly one auth source/,
-	);
-});
-
-test("pp send fails when auth-file path is missing", () => {
-	const result = runCli(["send",
-		"hello",
-		"--auth-file",
-		"/tmp/definitely-missing-auth-file.json",
-	]);
-
-	assert.equal(result.status, 1);
-	assert.match(result.stderr, /auth file does not exist:/);
-});
-
-test("pp send rejects auth-file with cdp-url", () => {
-	const result = runCli(["send",
-		"hello",
-		"--auth-file",
-		"/tmp/auth.json",
-		"--cdp-url",
-		"http://127.0.0.1:9222",
-	]);
-
-	assert.equal(result.status, 1);
-	assert.match(
-		result.stderr,
-		/auth file cannot be used with cdpUrl; use userDataDir\/profile or remove cdpUrl/,
-	);
+	assert.match(result.stderr, /unknown option '--auth-file'/);
 });
 
 test("pp send reads project from PP_CHATGPT_PROJECT", () => {

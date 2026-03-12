@@ -1,6 +1,6 @@
 /**
  * Public navigator API surface.
- * Re-exports compose, browser runtime, auth export, and limit utilities.
+ * Re-exports compose, browser runtime, session resolution, and limit utilities.
  */
 export {
 	composeNavigatorMessage,
@@ -153,25 +153,3 @@ export {
 	type ChatgptSession,
 	type OpenChatgptSessionOptions,
 } from "./runtime/chatgpt_session";
-export {
-	createAuthListener,
-	generateAuthToken,
-	runAuthListener,
-	type AuthListener,
-	type CreateAuthListenerOptions,
-	type RunAuthListenerOptions,
-} from "./auth_export/listener";
-export {
-	domainCookiesToStorageState,
-	extensionCookieToStorageStateCookie,
-	sanitizeDomain,
-	saveDomainCookies,
-	type StorageState,
-} from "./auth_export/storage_state";
-export {
-	parseExtensionMessage,
-	type DomainCookies,
-	type ExtensionCookie,
-	type ExtensionMessage,
-	type ServerMessage,
-} from "./auth_export/protocol";

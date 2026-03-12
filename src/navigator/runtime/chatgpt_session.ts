@@ -1,10 +1,5 @@
 import fs from "node:fs";
-import os from "node:os";
 import path from "node:path";
-import {
-	applyAuthCookiesToContext,
-	resolveDefaultAuthFile,
-} from "./chatgpt_session/auth_bootstrap";
 import {
 	COMPATIBLE_CHROMIUM_BINARIES,
 	COMPATIBLE_FIREFOX_BINARIES,
@@ -35,7 +30,6 @@ import {
 	reusableSessionMatchesLaunch,
 	saveReusableSessionState,
 } from "./chatgpt_session/reusable_session_state";
-import { launchWslWindowsBrowserViaCdp } from "./chatgpt_session/wsl_windows_host";
 import { profileUserDataDir } from "../profile/profile_env";
 import { parseProjectId } from "../project/project_ref";
 import { resolveNavigatorManagedProfileName } from "./managed_profile";
@@ -53,7 +47,7 @@ import type {
 
 /**
  * Browser session launcher for navigator commands.
- * Supports three auth modes: CDP attach, persistent profile, and storage-state file.
+ * Supports CDP attach and persistent profile sessions.
  */
 const { chromium, firefox } = require("@playwright/test") as {
 	chromium: ChromiumLauncher;
@@ -327,36 +321,10 @@ export const shouldNavigateToTargetUrl = ({
 	return currentUrl !== targetUrl;
 };
 
-export const shouldReloadTargetAfterAuthBootstrap = ({
-	navigate,
-	currentUrl,
-	targetUrl,
-	authBootstrapApplied,
-}: {
-	navigate: boolean;
-	currentUrl: string;
-	targetUrl: string;
-	authBootstrapApplied: boolean;
-}): boolean => {
-	if (!navigate || !authBootstrapApplied || !isNonEmpty(currentUrl)) {
-		return false;
-	}
-	const currentComparable = comparableUrl(currentUrl);
-	const targetComparable = comparableUrl(targetUrl);
-	if (currentComparable !== undefined && targetComparable !== undefined) {
-		return currentComparable === targetComparable;
-	}
-	return currentUrl === targetUrl;
-};
-
 type SessionSource =
 	| {
 			kind: "cdp";
 			cdpUrl: string;
-	  }
-	| {
-			kind: "auth-file";
-			authFile: string;
 	  }
 	| {
 			kind: "profile";
@@ -369,29 +337,16 @@ const resolveSessionSource = ({
 	userDataDir,
 	profile,
 	session,
-	authFile,
 }: {
 	cdpUrl?: string;
 	userDataDir?: string;
 	profile?: string;
 	session?: string;
-	authFile?: string;
 }): SessionSource => {
 	const hasCdp = isNonEmpty(cdpUrl);
-	const hasAuthFile = isNonEmpty(authFile);
 	const hasUserDataDir = isNonEmpty(userDataDir);
 	const hasProfile = isNonEmpty(profile);
 
-	if (hasCdp && hasAuthFile) {
-		throw new Error(
-			"auth file cannot be used with cdpUrl; use userDataDir/profile or remove cdpUrl",
-		);
-	}
-	if (hasAuthFile && (hasUserDataDir || hasProfile)) {
-		throw new Error(
-			"auth file cannot be combined with userDataDir; choose exactly one auth source",
-		);
-	}
 	if (hasProfile && hasUserDataDir) {
 		throw new Error(
 			"profile cannot be combined with userDataDir; choose exactly one profile source",
@@ -399,14 +354,6 @@ const resolveSessionSource = ({
 	}
 	if (hasCdp) {
 		return { kind: "cdp", cdpUrl };
-	}
-
-	if (hasAuthFile) {
-		const resolvedAuthFile = path.resolve(authFile);
-		if (!fs.existsSync(resolvedAuthFile)) {
-			throw new Error(`auth file does not exist: ${resolvedAuthFile}`);
-		}
-		return { kind: "auth-file", authFile: resolvedAuthFile };
 	}
 
 	if (hasProfile) {
@@ -450,7 +397,6 @@ const openViaContext = async ({
 	context,
 	targetUrl,
 	strictTabTargeting,
-	authBootstrapFile,
 	ownership,
 	freshLaunch,
 	close,
@@ -458,18 +404,10 @@ const openViaContext = async ({
 	context: RuntimeContext;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
-	authBootstrapFile?: string;
 	ownership: SessionOwnership;
 	freshLaunch: boolean;
 	close: () => Promise<void>;
 }): Promise<ChatgptSession> => {
-	if (isNonEmpty(authBootstrapFile)) {
-		await applyAuthCookiesToContext({
-			context,
-			authFile: authBootstrapFile,
-		});
-	}
-
 	let page = await pickSessionPage({
 		context,
 		targetUrl,
@@ -505,7 +443,6 @@ const openViaBrowser = async ({
 	browser,
 	targetUrl,
 	strictTabTargeting,
-	authBootstrapFile,
 	ownership,
 	freshLaunch,
 	close,
@@ -513,7 +450,6 @@ const openViaBrowser = async ({
 	browser: RuntimeBrowser;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
-	authBootstrapFile?: string;
 	ownership: SessionOwnership;
 	freshLaunch: boolean;
 	close: () => Promise<void>;
@@ -526,7 +462,6 @@ const openViaBrowser = async ({
 		context,
 		targetUrl,
 		strictTabTargeting,
-		authBootstrapFile,
 		ownership,
 		freshLaunch,
 		close,
@@ -537,19 +472,16 @@ const openViaCdp = async ({
 	cdpUrl,
 	targetUrl,
 	strictTabTargeting,
-	authBootstrapFile,
 }: {
 	cdpUrl: string;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
-	authBootstrapFile?: string;
 }): Promise<ChatgptSession> => {
 	const browser = await chromium.connectOverCDP(cdpUrl);
 	return openViaBrowser({
 		browser,
 		targetUrl,
 		strictTabTargeting,
-		authBootstrapFile,
 		ownership: "external",
 		freshLaunch: false,
 		close: async () => {},
@@ -565,7 +497,6 @@ const openViaReusableProfile = async ({
 	headless,
 	targetUrl,
 	strictTabTargeting,
-	authBootstrapFile,
 }: {
 	chromiumBin: string;
 	chromiumLaunchProfile: NavigatorChromiumLaunchProfile;
@@ -575,7 +506,6 @@ const openViaReusableProfile = async ({
 	headless: boolean;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
-	authBootstrapFile?: string;
 }): Promise<ChatgptSession> => {
 	const stateTargetUrl = targetUrl ?? DEFAULT_CHAT_URL;
 	const launchIdentity = {
@@ -595,12 +525,11 @@ const openViaReusableProfile = async ({
 		reusableSessionMatchesLaunch(persisted, launchIdentity)
 	) {
 		try {
-			return await openViaCdp({
-				cdpUrl: persisted.cdpUrl,
-				targetUrl,
-				strictTabTargeting,
-				authBootstrapFile,
-			});
+				return await openViaCdp({
+					cdpUrl: persisted.cdpUrl,
+					targetUrl,
+					strictTabTargeting,
+				});
 		} catch {
 			clearReusableSessionState({
 				targetUrl: stateTargetUrl,
@@ -627,14 +556,13 @@ const openViaReusableProfile = async ({
 			chromiumLaunchProfile,
 			session,
 		});
-		return await openViaBrowser({
-			browser: launched.browser,
-			targetUrl,
-			strictTabTargeting,
-			authBootstrapFile,
-			ownership: "external",
-			freshLaunch: true,
-			close: async () => {},
+			return await openViaBrowser({
+				browser: launched.browser,
+				targetUrl,
+				strictTabTargeting,
+				ownership: "external",
+				freshLaunch: true,
+				close: async () => {},
 		});
 	} catch (error) {
 		clearReusableSessionState({
@@ -655,7 +583,6 @@ const openViaPersistentProfileFirefox = async ({
 	headless,
 	targetUrl,
 	strictTabTargeting,
-	authBootstrapFile,
 	allowProfileResetOnLaunchFailure = false,
 }: {
 	firefoxBin?: string;
@@ -663,7 +590,6 @@ const openViaPersistentProfileFirefox = async ({
 	headless: boolean;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
-	authBootstrapFile?: string;
 	allowProfileResetOnLaunchFailure?: boolean;
 }): Promise<ChatgptSession> => {
 	const launchContext = async (): Promise<RuntimeContext> =>
@@ -687,46 +613,6 @@ const openViaPersistentProfileFirefox = async ({
 		context = await launchContext();
 	}
 	try {
-		return await openViaContext({
-			context,
-			targetUrl,
-			strictTabTargeting,
-			authBootstrapFile,
-			ownership: "managed",
-			freshLaunch: true,
-			close: async () => {
-				await context.close();
-			},
-		});
-	} catch (error) {
-		await context.close();
-		throw error;
-	}
-};
-
-const openViaStorageStateChromium = async (
-	chromiumBin: string,
-	chromiumLaunchArgs: readonly string[],
-	authFile: string,
-	headless: boolean,
-	targetUrl?: string,
-	strictTabTargeting?: boolean,
-): Promise<ChatgptSession> => {
-	if (isWslWindowsBrowserPath({ chromiumBin })) {
-		const ephemeralProfile = fs.mkdtempSync(
-			path.join(os.tmpdir(), "pp-wsl-windows-profile-"),
-		);
-		const launched = await launchWslWindowsBrowserViaCdp({
-			chromiumBin,
-			userDataDir: ephemeralProfile,
-			headless,
-			browserLaunchArgs: chromiumLaunchArgs,
-			connectOverCDP: (cdpUrl) => chromium.connectOverCDP(cdpUrl),
-		});
-		try {
-			const context = await launched.browser.newContext({
-				storageState: authFile,
-			});
 			return await openViaContext({
 				context,
 				targetUrl,
@@ -734,74 +620,13 @@ const openViaStorageStateChromium = async (
 				ownership: "managed",
 				freshLaunch: true,
 				close: async () => {
-					await context.close();
-					await launched.close();
-					fs.rmSync(ephemeralProfile, {
-						recursive: true,
-						force: true,
-					});
-				},
-			});
-		} catch (error) {
-			await launched.close();
-			fs.rmSync(ephemeralProfile, {
-				recursive: true,
-				force: true,
-			});
-			throw error;
-		}
+				await context.close();
+			},
+		});
+	} catch (error) {
+		await context.close();
+		throw error;
 	}
-
-	const browser = await chromium.launch({
-		executablePath: chromiumBin,
-		headless,
-		viewport: null,
-		args: [...chromiumLaunchArgs],
-	});
-
-	const context = await browser.newContext({
-		storageState: authFile,
-	});
-	return openViaContext({
-		context,
-		targetUrl,
-		strictTabTargeting,
-		ownership: "managed",
-		freshLaunch: true,
-		close: async () => {
-			await context.close();
-			await browser.close();
-		},
-	});
-};
-
-const openViaStorageStateFirefox = async (
-	firefoxBin: string | undefined,
-	authFile: string,
-	headless: boolean,
-	targetUrl?: string,
-	strictTabTargeting?: boolean,
-): Promise<ChatgptSession> => {
-	const browser = await firefox.launch({
-		...(isNonEmpty(firefoxBin) ? { executablePath: firefoxBin } : {}),
-		headless,
-		viewport: null,
-		timeout: FIREFOX_LAUNCH_TIMEOUT_MS,
-	});
-	const context = await browser.newContext({
-		storageState: authFile,
-	});
-	return openViaContext({
-		context,
-		targetUrl,
-		strictTabTargeting,
-		ownership: "managed",
-		freshLaunch: true,
-		close: async () => {
-			await context.close();
-			await browser.close();
-		},
-	});
 };
 
 export const openChatgptSession = async ({
@@ -812,7 +637,6 @@ export const openChatgptSession = async ({
 	userDataDir,
 	profile,
 	session: sessionName,
-	authFile,
 	headless = false,
 	targetUrl = DEFAULT_CHAT_URL,
 	navigate = true,
@@ -832,17 +656,11 @@ export const openChatgptSession = async ({
 		throw new Error("cdpUrl is only supported when browser=chromium");
 	}
 
-	const discoveredAuthFile =
-		!isNonEmpty(authFile) && !isNonEmpty(cdpUrl)
-			? resolveDefaultAuthFile({ targetUrl, session: sessionName })
-			: undefined;
-	const authBootstrapApplied = isNonEmpty(discoveredAuthFile);
 	const sessionSource = resolveSessionSource({
 		cdpUrl,
 		userDataDir,
 		profile,
 		session: sessionName,
-		authFile,
 	});
 	const session = await (() => {
 		switch (sessionSource.kind) {
@@ -851,26 +669,7 @@ export const openChatgptSession = async ({
 					cdpUrl: sessionSource.cdpUrl,
 					targetUrl,
 					strictTabTargeting,
-					authBootstrapFile: discoveredAuthFile,
 				});
-			case "auth-file": {
-				return selectedBrowser === "chromium"
-					? openViaStorageStateChromium(
-						requireChromiumBin(chromiumBin),
-						selectedChromiumLaunchArgs,
-						sessionSource.authFile,
-						headless,
-						targetUrl,
-						strictTabTargeting,
-					)
-					: openViaStorageStateFirefox(
-						resolveFirefoxLaunchBin(chromiumBin),
-						sessionSource.authFile,
-						headless,
-						targetUrl,
-						strictTabTargeting,
-					);
-			}
 			case "profile": {
 				const profileChromiumBin =
 					selectedBrowser === "chromium"
@@ -901,7 +700,6 @@ export const openChatgptSession = async ({
 						headless,
 						targetUrl,
 						strictTabTargeting,
-						authBootstrapFile: discoveredAuthFile,
 					})
 					: openViaPersistentProfileFirefox({
 						firefoxBin: profileFirefoxBin,
@@ -909,7 +707,6 @@ export const openChatgptSession = async ({
 						headless,
 						targetUrl,
 						strictTabTargeting,
-						authBootstrapFile: discoveredAuthFile,
 						allowProfileResetOnLaunchFailure:
 							sessionSource.profileName !== undefined,
 					});
@@ -917,21 +714,15 @@ export const openChatgptSession = async ({
 		}
 	})();
 	try {
-		if (
-			shouldNavigateToTargetUrl({
-				navigate,
-				currentUrl: session.page.url(),
-				targetUrl,
-				preserveProjectConversation,
-			}) ||
-			shouldReloadTargetAfterAuthBootstrap({
-				navigate,
-				currentUrl: session.page.url(),
-				targetUrl,
-				authBootstrapApplied,
-			})
-		) {
-			await session.page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+			if (
+				shouldNavigateToTargetUrl({
+					navigate,
+					currentUrl: session.page.url(),
+					targetUrl,
+					preserveProjectConversation,
+				})
+			) {
+				await session.page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 		}
 
 		if (ensureComposer) {

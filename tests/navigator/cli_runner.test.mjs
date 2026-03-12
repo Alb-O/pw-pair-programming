@@ -310,6 +310,14 @@ test("resolvePpCommandLockPath scopes locks per project and profile context", ()
 		...baseConnection,
 		profile: "team-b",
 	});
+	const sessionALockPath = resolvePpCommandLockPath({
+		...baseConnection,
+		session: "session-a",
+	});
+	const sessionBLockPath = resolvePpCommandLockPath({
+		...baseConnection,
+		session: "session-b",
+	});
 	const cdpProjectALockPath = resolvePpCommandLockPath({
 		...baseConnection,
 		cdpUrl: "http://127.0.0.1:9222",
@@ -357,6 +365,8 @@ test("resolvePpCommandLockPath scopes locks per project and profile context", ()
 	assert.equal(managedProjectALockPath, managedProjectBLockPath);
 	assert.notEqual(defaultLockPath, profileALockPath);
 	assert.notEqual(profileALockPath, profileBLockPath);
+	assert.notEqual(defaultLockPath, sessionALockPath);
+	assert.notEqual(sessionALockPath, sessionBLockPath);
 	assert.notEqual(cdpProjectALockPath, cdpProjectBLockPath);
 	assert.notEqual(authProjectALockPath, authProjectBLockPath);
 	assert.notEqual(defaultLockPath, strictChromiumProfileLockPath);

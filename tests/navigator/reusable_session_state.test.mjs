@@ -222,3 +222,62 @@ test("reusable session state isolates launch identities by chromium launch profi
 		);
 	});
 });
+
+test("reusable session state isolates named sessions on the same host", () => {
+	withTempHome((homeDir) => {
+		const launch = {
+			chromiumBin: "/usr/bin/chromium",
+			userDataDir: "/tmp/pp/profile-shared",
+			headless: true,
+			chromiumLaunchProfile: "low-detection",
+		};
+
+		saveReusableSessionState({
+			targetUrl: "https://chatgpt.com",
+			cdpUrl: "ws://127.0.0.1:9222/devtools/browser/a",
+			chromiumBin: launch.chromiumBin,
+			userDataDir: launch.userDataDir,
+			headless: launch.headless,
+			chromiumLaunchProfile: launch.chromiumLaunchProfile,
+			session: "team-a",
+			env: {},
+			homeDir,
+		});
+		saveReusableSessionState({
+			targetUrl: "https://chatgpt.com",
+			cdpUrl: "ws://127.0.0.1:9222/devtools/browser/b",
+			chromiumBin: launch.chromiumBin,
+			userDataDir: launch.userDataDir,
+			headless: launch.headless,
+			chromiumLaunchProfile: launch.chromiumLaunchProfile,
+			session: "team-b",
+			env: {},
+			homeDir,
+		});
+
+		const loadedA = loadReusableSessionState({
+			targetUrl: "https://chatgpt.com",
+			launch,
+			session: "team-a",
+			env: {},
+			homeDir,
+		});
+		const loadedB = loadReusableSessionState({
+			targetUrl: "https://chatgpt.com",
+			launch,
+			session: "team-b",
+			env: {},
+			homeDir,
+		});
+		const loadedDefault = loadReusableSessionState({
+			targetUrl: "https://chatgpt.com",
+			launch,
+			env: {},
+			homeDir,
+		});
+
+		assert.equal(loadedA?.cdpUrl, "ws://127.0.0.1:9222/devtools/browser/a");
+		assert.equal(loadedB?.cdpUrl, "ws://127.0.0.1:9222/devtools/browser/b");
+		assert.equal(loadedDefault, undefined);
+	});
+});

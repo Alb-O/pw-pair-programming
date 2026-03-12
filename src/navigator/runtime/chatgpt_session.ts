@@ -36,15 +36,9 @@ import {
 	saveReusableSessionState,
 } from "./chatgpt_session/reusable_session_state";
 import { launchWslWindowsBrowserViaCdp } from "./chatgpt_session/wsl_windows_host";
-import {
-	PP_DEFAULT_PROFILE_NAME,
-	resolvePpDefaultProfileDir,
-} from "./pp_state_paths";
-import {
-	parseNavigatorProfile,
-	profileUserDataDir,
-} from "../profile/profile_env";
+import { profileUserDataDir } from "../profile/profile_env";
 import { parseProjectId } from "../project/project_ref";
+import { resolveNavigatorManagedProfileName } from "./managed_profile";
 import { resolveProfileRuntimeUserDataDir } from "./chatgpt_session/profile_runtime_partition";
 import type {
 	ChatgptSession,
@@ -374,11 +368,13 @@ const resolveSessionSource = ({
 	cdpUrl,
 	userDataDir,
 	profile,
+	session,
 	authFile,
 }: {
 	cdpUrl?: string;
 	userDataDir?: string;
 	profile?: string;
+	session?: string;
 	authFile?: string;
 }): SessionSource => {
 	const hasCdp = isNonEmpty(cdpUrl);
@@ -414,7 +410,10 @@ const resolveSessionSource = ({
 	}
 
 	if (hasProfile) {
-		const profileName = parseNavigatorProfile(profile);
+		const profileName = resolveNavigatorManagedProfileName({
+			profile,
+			session,
+		});
 		return {
 			kind: "profile",
 			userDataDir: path.resolve(
@@ -431,9 +430,19 @@ const resolveSessionSource = ({
 	return {
 		kind: "profile",
 		userDataDir: path.resolve(
-			hasUserDataDir ? userDataDir : resolvePpDefaultProfileDir(),
+			hasUserDataDir
+				? userDataDir
+				: profileUserDataDir({
+					profile: resolveNavigatorManagedProfileName({
+						session,
+					}),
+				}),
 		),
-		profileName: hasUserDataDir ? undefined : PP_DEFAULT_PROFILE_NAME,
+		profileName: hasUserDataDir
+			? undefined
+			: resolveNavigatorManagedProfileName({
+				session,
+			}),
 	};
 };
 
@@ -552,6 +561,7 @@ const openViaReusableProfile = async ({
 	chromiumLaunchProfile,
 	chromiumLaunchArgs,
 	userDataDir,
+	session,
 	headless,
 	targetUrl,
 	strictTabTargeting,
@@ -561,6 +571,7 @@ const openViaReusableProfile = async ({
 	chromiumLaunchProfile: NavigatorChromiumLaunchProfile;
 	chromiumLaunchArgs: readonly string[];
 	userDataDir: string;
+	session?: string;
 	headless: boolean;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
@@ -576,6 +587,7 @@ const openViaReusableProfile = async ({
 	const persisted = loadReusableSessionState({
 		targetUrl: stateTargetUrl,
 		launch: launchIdentity,
+		session,
 	});
 
 	if (
@@ -593,6 +605,7 @@ const openViaReusableProfile = async ({
 			clearReusableSessionState({
 				targetUrl: stateTargetUrl,
 				launch: launchIdentity,
+				session,
 			});
 		}
 	}
@@ -612,6 +625,7 @@ const openViaReusableProfile = async ({
 			userDataDir,
 			headless,
 			chromiumLaunchProfile,
+			session,
 		});
 		return await openViaBrowser({
 			browser: launched.browser,
@@ -626,6 +640,7 @@ const openViaReusableProfile = async ({
 		clearReusableSessionState({
 			targetUrl: stateTargetUrl,
 			launch: launchIdentity,
+			session,
 		});
 		try {
 			await launched.browser.close();
@@ -796,6 +811,7 @@ export const openChatgptSession = async ({
 	cdpUrl,
 	userDataDir,
 	profile,
+	session: sessionName,
 	authFile,
 	headless = false,
 	targetUrl = DEFAULT_CHAT_URL,
@@ -818,13 +834,14 @@ export const openChatgptSession = async ({
 
 	const discoveredAuthFile =
 		!isNonEmpty(authFile) && !isNonEmpty(cdpUrl)
-			? resolveDefaultAuthFile({ targetUrl })
+			? resolveDefaultAuthFile({ targetUrl, session: sessionName })
 			: undefined;
 	const authBootstrapApplied = isNonEmpty(discoveredAuthFile);
 	const sessionSource = resolveSessionSource({
 		cdpUrl,
 		userDataDir,
 		profile,
+		session: sessionName,
 		authFile,
 	});
 	const session = await (() => {
@@ -880,6 +897,7 @@ export const openChatgptSession = async ({
 						chromiumLaunchProfile: selectedChromiumLaunchProfile,
 						chromiumLaunchArgs: selectedChromiumLaunchArgs,
 						userDataDir: profileUserDataDir,
+						session: sessionName,
 						headless,
 						targetUrl,
 						strictTabTargeting,

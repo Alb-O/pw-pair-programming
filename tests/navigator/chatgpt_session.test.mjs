@@ -287,6 +287,36 @@ test("resolveDefaultAuthFile resolves host auth file in state root", () => {
 	});
 });
 
+test("resolveDefaultAuthFile prefers session-scoped auth file before legacy root", () => {
+	withTempBinDir((dir) => {
+		const stateRoot = path.join(dir, "xdg-state");
+		const legacyFile = path.join(stateRoot, "pp", "auth", "chatgpt_com.json");
+		const sessionFile = path.join(
+			stateRoot,
+			"pp",
+			"auth",
+			"sessions",
+			"team-a",
+			"chatgpt_com.json",
+		);
+		fs.mkdirSync(path.dirname(legacyFile), { recursive: true });
+		fs.mkdirSync(path.dirname(sessionFile), { recursive: true });
+		fs.writeFileSync(legacyFile, '{"cookies":[{"name":"legacy"}]}', "utf8");
+		fs.writeFileSync(sessionFile, '{"cookies":[{"name":"session"}]}', "utf8");
+
+		const resolved = resolveDefaultAuthFile({
+			targetUrl: "https://chatgpt.com/g/g-p-abc/project",
+			session: "team-a",
+			homeDir: dir,
+			env: {
+				XDG_STATE_HOME: stateRoot,
+			},
+		});
+
+		assert.equal(resolved, sessionFile);
+	});
+});
+
 test("shouldNavigateToTargetUrl suppresses redundant navigation", () => {
 	assert.equal(
 		shouldNavigateToTargetUrl({

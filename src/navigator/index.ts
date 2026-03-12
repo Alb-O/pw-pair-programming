@@ -38,6 +38,16 @@ export {
 	type ProjectUrls,
 } from "./project/project_ref";
 export {
+	NAVIGATOR_DEFAULT_SESSION_NAME,
+	NAVIGATOR_SESSION_ENV,
+	parseNavigatorSession,
+	readNavigatorSessionValue,
+	resolveNavigatorSession,
+	type ResolvedNavigatorSession,
+	type ResolveSessionInput,
+	type SessionSource,
+} from "./session/session_env";
+export {
 	NAVIGATOR_PROJECT_ENV,
 	readNavigatorProjectValue,
 	resolveNavigatorProject,

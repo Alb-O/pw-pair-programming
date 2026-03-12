@@ -106,6 +106,7 @@ export type OpenChatgptSessionOptions = {
 	cdpUrl?: string;
 	userDataDir?: string;
 	profile?: string;
+	session?: string;
 	authFile?: string;
 	headless?: boolean;
 	targetUrl?: string;

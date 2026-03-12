@@ -17,6 +17,10 @@ import {
 	NAVIGATOR_PROFILE_ENV,
 	resolveNavigatorProfile,
 } from "../profile/profile_env";
+import {
+	NAVIGATOR_SESSION_ENV,
+	resolveNavigatorSession,
+} from "../session/session_env";
 import { parseProjectRef, urlInProject } from "../project/project_ref";
 import {
 	attachToNavigator,
@@ -78,7 +82,8 @@ import {
 	type ReusableSessionState,
 } from "./chatgpt_session/reusable_session_state";
 import { acquirePpCommandLock, releasePpCommandLock } from "./command_lock";
-import { PP_DEFAULT_PROFILE_NAME, resolvePpRuntimeDir } from "./pp_state_paths";
+import { resolveNavigatorManagedProfileName } from "./managed_profile";
+import { resolvePpRuntimeDir } from "./pp_state_paths";
 
 /**
  * Runtime command handlers used by the top-level CLI.
@@ -91,6 +96,7 @@ export type NavigatorConnectionOptions = {
 	cdpUrl?: string;
 	userDataDir?: string;
 	profile?: string;
+	session?: string;
 	authFile?: string;
 	headless: boolean;
 	chatUrl: string;
@@ -294,7 +300,10 @@ const resolveLockScopeConnection = (
 	const sessionKind = resolveLockSessionKind(connection);
 	const profile =
 		sessionKind === "managed-profile"
-			? normalizedScopeValue(connection.profile) ?? PP_DEFAULT_PROFILE_NAME
+			? resolveNavigatorManagedProfileName({
+				profile: normalizedScopeValue(connection.profile) ?? undefined,
+				session: normalizedScopeValue(connection.session) ?? undefined,
+			})
 			: null;
 	const project =
 		sessionKind === "managed-profile"
@@ -316,6 +325,7 @@ const resolveLockScopeConnection = (
 			? path.resolve(connection.userDataDir)
 			: null,
 		profile,
+		session: normalizedScopeValue(connection.session),
 		project,
 	});
 };
@@ -395,9 +405,10 @@ const resolveManagedLaunchIdentity = (
 			chromiumLaunchProfile: resolveConnectionChromiumLaunchProfile(connection),
 		};
 	}
-	const profile = isNonEmpty(connection.profile)
-		? connection.profile
-		: PP_DEFAULT_PROFILE_NAME;
+	const profile = resolveNavigatorManagedProfileName({
+		profile: connection.profile,
+		session: connection.session,
+	});
 	return {
 		chromiumBin: resolvedChromiumBin,
 		userDataDir: resolveProfileRuntimeUserDataDir({
@@ -798,6 +809,7 @@ const withNavigatorSession = async <T>(
 				? loadReusableSessionState({
 						targetUrl: connection.chatUrl,
 						launch: managedLaunch,
+						session: connection.session,
 					})
 				: undefined;
 		const targetUrl = resolveTargetUrl({
@@ -818,6 +830,7 @@ const withNavigatorSession = async <T>(
 				cdpUrl: connection.cdpUrl,
 				userDataDir: connection.userDataDir,
 				profile: connection.profile,
+				session: connection.session,
 				authFile: connection.authFile,
 				headless: connection.headless,
 				targetUrl: openTargetUrl,
@@ -875,6 +888,7 @@ const withNavigatorSession = async <T>(
 						saveReusableSessionLastPage({
 							targetUrl: connection.chatUrl,
 							launch: managedLaunch,
+							session: connection.session,
 							lastPageUrl: currentPageUrl,
 						});
 					}
@@ -1256,6 +1270,9 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 		const profile = resolveNavigatorProfile({
 			profile: options.profile,
 		});
+		const session = resolveNavigatorSession({
+			session: options.session,
+		});
 		const browser = resolveNavigatorBrowser({
 			browser: options.browser,
 		});
@@ -1268,6 +1285,8 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 			env_project_value: process.env[NAVIGATOR_PROJECT_ENV] ?? null,
 			env_profile_var: NAVIGATOR_PROFILE_ENV,
 			env_profile_value: process.env[NAVIGATOR_PROFILE_ENV] ?? null,
+			env_session_var: NAVIGATOR_SESSION_ENV,
+			env_session_value: process.env[NAVIGATOR_SESSION_ENV] ?? null,
 			env_browser_var: NAVIGATOR_BROWSER_ENV,
 			env_browser_value: process.env[NAVIGATOR_BROWSER_ENV] ?? null,
 			env_chromium_launch_profile_var: NAVIGATOR_CHROMIUM_LAUNCH_PROFILE_ENV,
@@ -1293,6 +1312,15 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 							profile: profile.profile,
 							user_data_dir: profile.userDataDir,
 							env_var: profile.envVar,
+						},
+			session_binding:
+				session === null
+					? null
+					: {
+							source: session.source,
+							raw: session.raw,
+							session: session.session,
+							env_var: session.envVar,
 						},
 			browser_binding:
 				browser === null
@@ -1321,6 +1349,7 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 				cdp_url: options.cdpUrl ?? null,
 				user_data_dir: options.userDataDir ?? null,
 				profile: options.profile ?? null,
+				session: options.session ?? null,
 				auth_file: options.authFile ?? null,
 				headless: options.headless,
 				chat_url: options.chatUrl,

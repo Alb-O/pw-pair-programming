@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import { WebSocketServer, type RawData, type WebSocket } from "ws";
-import { resolvePpAuthDir } from "../runtime/pp_state_paths";
+import { resolvePpSessionAuthDir } from "../runtime/pp_state_paths";
 import {
 	parseExtensionMessage,
 	type DomainCookies,
@@ -21,6 +21,7 @@ export type CreateAuthListenerOptions = {
 	port?: number;
 	token?: string;
 	authDir?: string;
+	session?: string;
 	version?: string;
 	logger?: (line: string) => void;
 };
@@ -38,10 +39,12 @@ export type RunAuthListenerOptions = {
 	port?: number;
 	token?: string;
 	authDir?: string;
+	session?: string;
 	version?: string;
 };
 
-const defaultAuthDir = (): string => resolvePpAuthDir();
+const defaultAuthDir = (session?: string): string =>
+	resolvePpSessionAuthDir({ session });
 
 export const generateAuthToken = (): string =>
 	crypto.randomBytes(16).toString("hex");
@@ -64,10 +67,12 @@ export const createAuthListener = async ({
 	host = DEFAULT_HOST,
 	port = DEFAULT_PORT,
 	token = generateAuthToken(),
-	authDir = defaultAuthDir(),
+	authDir,
+	session,
 	version = "0.1.0",
 	logger,
 }: CreateAuthListenerOptions = {}): Promise<AuthListener> => {
+	authDir = authDir ?? defaultAuthDir(session);
 	fs.mkdirSync(authDir, { recursive: true });
 
 	const server = new WebSocketServer({
@@ -201,6 +206,7 @@ export const runAuthListener = async ({
 	port = DEFAULT_PORT,
 	token,
 	authDir,
+	session,
 	version = "0.1.0",
 }: RunAuthListenerOptions = {}): Promise<void> => {
 	const listener = await createAuthListener({
@@ -208,6 +214,7 @@ export const runAuthListener = async ({
 		port,
 		token,
 		authDir,
+		session,
 		version,
 		logger: (line) => {
 			process.stdout.write(`${line}\n`);

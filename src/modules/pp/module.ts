@@ -24,6 +24,10 @@ import {
 	resolveNavigatorProfile,
 } from "../../navigator/profile/profile_env";
 import {
+	NAVIGATOR_SESSION_ENV,
+	resolveNavigatorSession,
+} from "../../navigator/session/session_env";
+import {
 	NAVIGATOR_PROJECT_ENV,
 	resolveNavigatorProject,
 } from "../../navigator/project/project_env";
@@ -78,9 +82,10 @@ export const PP_COMMAND_USAGE_LINES = [
 ] as const;
 
 export const CONNECTION_USAGE_LINES = [
-	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--auth-file <path>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
+	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--session <name>] [--auth-file <path>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
 	`  default project source: $${NAVIGATOR_PROJECT_ENV} when --project is not provided`,
 	`  default profile source: $${NAVIGATOR_PROFILE_ENV} when --user-data-dir and --profile are not provided`,
+	`  default session source: $${NAVIGATOR_SESSION_ENV} when --session is not provided`,
 	`  default browser source: $${NAVIGATOR_BROWSER_ENV} when --browser is not provided`,
 	`  default chromium launch profile source: $${NAVIGATOR_CHROMIUM_LAUNCH_PROFILE_ENV} when --chromium-launch-profile is not provided`,
 ] as const;
@@ -90,7 +95,7 @@ export const PP_USAGE = [
 	"",
 	"pair programming commands:",
 	...PP_COMMAND_USAGE_LINES,
-	"  auth-listen [--host <ip>] [--port <int>] [--auth-dir <path>] [--token <hex>]",
+	"  auth-listen [--host <ip>] [--port <int>] [--auth-dir <path>] [--session <name>] [--token <hex>]",
 	"",
 	"connection opts:",
 	...CONNECTION_USAGE_LINES,
@@ -177,6 +182,7 @@ export type AuthListenCommand = {
 	host: string;
 	port: number;
 	authDir?: string;
+	session?: string;
 	token?: string;
 };
 
@@ -204,6 +210,7 @@ const applyConnectionOptions = (command: Command): void => {
 	command.option("--chromium-bin <path>");
 	command.option("--user-data-dir <path>");
 	command.option("--profile <name>");
+	command.option("--session <name>");
 	command.option("--auth-file <path>");
 	command.option("--chat-url <url>");
 	command.option("--project <g-p-id-or-url>");
@@ -351,6 +358,12 @@ const parseNavigatorConnection = ({
 					}),
 				})
 			: null;
+	const sessionBinding = resolveNavigatorSession({
+		session: readStringOption({
+			options,
+			key: "session",
+		}),
+	});
 	const projectBinding = resolveNavigatorProject({
 		project: readStringOption({
 			options,
@@ -384,6 +397,7 @@ const parseNavigatorConnection = ({
 		}),
 		userDataDir: explicitUserDataDir,
 		profile: profileBinding?.profile,
+		session: sessionBinding?.session,
 		authFile: readStringOption({
 			options,
 			key: "authFile",
@@ -1099,6 +1113,7 @@ const parseAuthListenerCommand = (
 			command.option("--host <ip>");
 			command.option("--port <int>");
 			command.option("--auth-dir <path>");
+			command.option("--session <name>");
 			command.option("--token <hex>");
 		},
 	});
@@ -1125,6 +1140,12 @@ const parseAuthListenerCommand = (
 			options,
 			key: "authDir",
 		}),
+		session: resolveNavigatorSession({
+			session: readStringOption({
+				options,
+				key: "session",
+			}),
+		})?.session,
 		token: readStringOption({
 			options,
 			key: "token",
@@ -1333,6 +1354,7 @@ export const runPpModuleCommand = async (
 			host: command.host,
 			port: command.port,
 			authDir: command.authDir,
+			session: command.session,
 			token: command.token,
 		});
 		return 0;

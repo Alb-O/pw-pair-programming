@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { NAVIGATOR_DEFAULT_CHROMIUM_LAUNCH_PROFILE } from "./chromium_launch_profile_env";
 import type { NavigatorChromiumLaunchProfile } from "./chromium_launch_profile_env";
-import { resolvePpRuntimeDir } from "../pp_state_paths";
+import { resolvePpSessionRuntimeDir } from "../pp_state_paths";
 
 /**
  * Persisted metadata for reconnecting pp commands to a reusable browser session.
@@ -91,53 +91,61 @@ const hostFilename = (host: string): string =>
 	host.replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "") || "session";
 
 const resolveSessionRuntimeDir = ({
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
-} = {}): string => resolvePpRuntimeDir({ env, homeDir });
+} = {}): string => resolvePpSessionRuntimeDir({ session, env, homeDir });
 
 const resolveLegacySessionPath = ({
 	host,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	host: string;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): string =>
 	path.resolve(
-		resolveSessionRuntimeDir({ env, homeDir }),
+		resolveSessionRuntimeDir({ session, env, homeDir }),
 		`${hostFilename(host)}.session.json`,
 	);
 
 const resolveLaunchSessionPath = ({
 	host,
 	launch,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	host: string;
 	launch: ReusableSessionLaunchIdentity;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): string =>
 	path.resolve(
-		resolveSessionRuntimeDir({ env, homeDir }),
+		resolveSessionRuntimeDir({ session, env, homeDir }),
 		`${hostFilename(host)}.${launchFingerprint(launch)}.session.json`,
 	);
 
 const resolveSessionStatePathsForHost = ({
 	host,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	host: string;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): string[] => {
-	const runtimeDir = resolveSessionRuntimeDir({ env, homeDir });
+	const runtimeDir = resolveSessionRuntimeDir({ session, env, homeDir });
 	if (!fs.existsSync(runtimeDir)) {
 		return [];
 	}
@@ -269,12 +277,14 @@ const writeSessionState = ({
 	targetUrl,
 	launch,
 	state,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	targetUrl: string;
 	launch: ReusableSessionLaunchIdentity;
 	state: ReusableSessionState;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): void => {
@@ -282,6 +292,7 @@ const writeSessionState = ({
 	const filePath = resolveLaunchSessionPath({
 		host,
 		launch,
+		session,
 		env,
 		homeDir,
 	});
@@ -299,11 +310,13 @@ const updatedAtMillis = (state: ReusableSessionState): number => {
 export const loadReusableSessionState = ({
 	targetUrl,
 	launch,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	targetUrl: string;
 	launch?: ReusableSessionLaunchIdentity;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): ReusableSessionState | undefined => {
@@ -314,6 +327,7 @@ export const loadReusableSessionState = ({
 		const launchPath = resolveLaunchSessionPath({
 			host,
 			launch: normalizedLaunch,
+			session,
 			env,
 			homeDir,
 		});
@@ -322,6 +336,7 @@ export const loadReusableSessionState = ({
 		}
 		const legacyPath = resolveLegacySessionPath({
 			host,
+			session,
 			env,
 			homeDir,
 		});
@@ -336,6 +351,7 @@ export const loadReusableSessionState = ({
 
 	const states = resolveSessionStatePathsForHost({
 		host,
+		session,
 		env,
 		homeDir,
 	})
@@ -352,6 +368,7 @@ export const saveReusableSessionState = ({
 	headless,
 	chromiumLaunchProfile = NAVIGATOR_DEFAULT_CHROMIUM_LAUNCH_PROFILE,
 	lastPageUrl,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
@@ -362,6 +379,7 @@ export const saveReusableSessionState = ({
 	headless: boolean;
 	chromiumLaunchProfile?: NavigatorChromiumLaunchProfile;
 	lastPageUrl?: string;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): ReusableSessionState => {
@@ -389,6 +407,7 @@ export const saveReusableSessionState = ({
 		targetUrl,
 		launch,
 		state: output,
+		session,
 		env,
 		homeDir,
 	});
@@ -399,18 +418,21 @@ export const saveReusableSessionLastPage = ({
 	targetUrl,
 	lastPageUrl,
 	launch,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	targetUrl: string;
 	lastPageUrl: string;
 	launch?: ReusableSessionLaunchIdentity;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): void => {
 	const existing = loadReusableSessionState({
 		targetUrl,
 		launch,
+		session,
 		env,
 		homeDir,
 	});
@@ -429,6 +451,7 @@ export const saveReusableSessionLastPage = ({
 	writeSessionState({
 		targetUrl,
 		launch: resolvedLaunch,
+		session,
 		env,
 		homeDir,
 		state: {
@@ -442,11 +465,13 @@ export const saveReusableSessionLastPage = ({
 export const clearReusableSessionState = ({
 	targetUrl,
 	launch,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 }: {
 	targetUrl: string;
 	launch?: ReusableSessionLaunchIdentity;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 }): void => {
@@ -455,6 +480,7 @@ export const clearReusableSessionState = ({
 		const launchPath = resolveLaunchSessionPath({
 			host,
 			launch: normalizeLaunchIdentity(launch),
+			session,
 			env,
 			homeDir,
 		});
@@ -468,6 +494,7 @@ export const clearReusableSessionState = ({
 
 	for (const filePath of resolveSessionStatePathsForHost({
 		host,
+		session,
 		env,
 		homeDir,
 	})) {

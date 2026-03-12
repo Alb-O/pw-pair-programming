@@ -165,6 +165,22 @@ test("parseArgs reads profile name from PP_PROFILE env", () => {
 	});
 });
 
+test("parseArgs keeps session binding as session name", () => {
+	const parsed = parseArgs(["wait", "--session", "team-a"]);
+
+	assert.equal(parsed.kind, "pp-wait");
+	assert.equal(parsed.options.session, "team-a");
+});
+
+test("parseArgs reads session name from PLAYWRIGHT_CLI_SESSION env", () => {
+	withEnvVar("PLAYWRIGHT_CLI_SESSION", "team-env", () => {
+		const parsed = parseArgs(["wait"]);
+
+		assert.equal(parsed.kind, "pp-wait");
+		assert.equal(parsed.options.session, "team-env");
+	});
+});
+
 test("parseArgs reads browser from PP_BROWSER env", () => {
 	withEnvVar("PP_BROWSER", "firefox", () => {
 		const parsed = parseArgs(["wait"]);
@@ -190,6 +206,15 @@ test("parseArgs profile option overrides invalid profile env", () => {
 		assert.equal(parsed.kind, "pp-wait");
 		assert.equal(parsed.options.profile, "team-ok");
 		assert.equal(parsed.options.userDataDir, undefined);
+	});
+});
+
+test("parseArgs session option overrides invalid session env", () => {
+	withEnvVar("PLAYWRIGHT_CLI_SESSION", "bad/name", () => {
+		const parsed = parseArgs(["wait", "--session", "team-ok"]);
+
+		assert.equal(parsed.kind, "pp-wait");
+		assert.equal(parsed.options.session, "team-ok");
 	});
 });
 
@@ -225,6 +250,12 @@ test("parseArgs user-data-dir option overrides invalid profile env", () => {
 test("parseArgs fails loudly on invalid PP_PROFILE env value", () => {
 	withEnvVar("PP_PROFILE", "bad/name", () => {
 		assert.throws(() => parseArgs(["wait"]), /Invalid profile reference/);
+	});
+});
+
+test("parseArgs fails loudly on invalid PLAYWRIGHT_CLI_SESSION env value", () => {
+	withEnvVar("PLAYWRIGHT_CLI_SESSION", "bad/name", () => {
+		assert.throws(() => parseArgs(["wait"]), /Invalid session reference/);
 	});
 });
 
@@ -428,6 +459,13 @@ test("auth-listen validates integer port", () => {
 
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /option '--port' must be an integer/);
+});
+
+test("parseArgs parses auth-listen session binding", () => {
+	const parsed = parseArgs(["auth-listen", "--session", "team-a"]);
+
+	assert.equal(parsed.kind, "auth-listen");
+	assert.equal(parsed.session, "team-a");
 });
 
 test("pp send rejects auth-file with user-data-dir", () => {

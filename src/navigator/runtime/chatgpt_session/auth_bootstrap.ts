@@ -1,7 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { resolvePpAuthDir } from "../pp_state_paths";
+import { resolvePpAuthDir, resolvePpSessionAuthDir } from "../pp_state_paths";
+import {
+	NAVIGATOR_DEFAULT_SESSION_NAME,
+	parseNavigatorSession,
+} from "../../session/session_env";
 import type { RuntimeContext } from "./types";
 
 /**
@@ -27,11 +31,13 @@ const parseTargetHost = (targetUrl?: string): string | undefined => {
 
 export const resolveDefaultAuthFile = ({
 	targetUrl,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 	fileExists = fs.existsSync,
 }: {
 	targetUrl?: string;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 	fileExists?: (filePath: string) => boolean;
@@ -42,9 +48,23 @@ export const resolveDefaultAuthFile = ({
 	}
 
 	const filename = `${sanitizeHost(host)}.json`;
-	const candidates = [
-		path.resolve(resolvePpAuthDir({ env, homeDir }), filename),
-	];
+	const candidates: string[] = [];
+	if (isNonEmpty(session)) {
+		const parsedSession = parseNavigatorSession(session);
+		if (parsedSession !== NAVIGATOR_DEFAULT_SESSION_NAME) {
+			candidates.push(
+				path.resolve(
+					resolvePpSessionAuthDir({
+						session: parsedSession,
+						env,
+						homeDir,
+					}),
+					filename,
+				),
+			);
+		}
+	}
+	candidates.push(path.resolve(resolvePpAuthDir({ env, homeDir }), filename));
 
 	for (const candidate of candidates) {
 		if (fileExists(candidate)) {

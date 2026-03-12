@@ -1,8 +1,29 @@
 import os from "node:os";
 import path from "node:path";
+import {
+	NAVIGATOR_DEFAULT_SESSION_NAME,
+	parseNavigatorSession,
+} from "../session/session_env";
 
 const isNonEmpty = (value?: string): value is string =>
 	value !== undefined && value.trim() !== "";
+
+const resolveSessionScopedDir = ({
+	baseDir,
+	session,
+}: {
+	baseDir: string;
+	session?: string;
+}): string => {
+	if (!isNonEmpty(session)) {
+		return baseDir;
+	}
+	const parsedSession = parseNavigatorSession(session);
+	if (parsedSession === NAVIGATOR_DEFAULT_SESSION_NAME) {
+		return baseDir;
+	}
+	return path.resolve(baseDir, "sessions", parsedSession);
+};
 
 export const PP_DEFAULT_PROFILE_NAME = "chatgpt-profile";
 const PROFILE_BROWSER_STATE_DIR = "browser-state";
@@ -99,6 +120,20 @@ export const resolvePpAuthDir = ({
 	homeDir?: string;
 } = {}): string => path.resolve(resolvePpStateRoot({ env, homeDir }), "auth");
 
+export const resolvePpSessionAuthDir = ({
+	session,
+	env = process.env,
+	homeDir = os.homedir(),
+}: {
+	session?: string;
+	env?: NodeJS.ProcessEnv;
+	homeDir?: string;
+} = {}): string =>
+	resolveSessionScopedDir({
+		baseDir: resolvePpAuthDir({ env, homeDir }),
+		session,
+	});
+
 export const resolvePpRuntimeDir = ({
 	env = process.env,
 	homeDir = os.homedir(),
@@ -107,3 +142,17 @@ export const resolvePpRuntimeDir = ({
 	homeDir?: string;
 } = {}): string =>
 	path.resolve(resolvePpStateRoot({ env, homeDir }), "runtime");
+
+export const resolvePpSessionRuntimeDir = ({
+	session,
+	env = process.env,
+	homeDir = os.homedir(),
+}: {
+	session?: string;
+	env?: NodeJS.ProcessEnv;
+	homeDir?: string;
+} = {}): string =>
+	resolveSessionScopedDir({
+		baseDir: resolvePpRuntimeDir({ env, homeDir }),
+		session,
+	});

@@ -4,10 +4,8 @@ import {
 	type NavigatorBrowser,
 } from "./browser_env";
 import { isWslWindowsBrowserPath } from "./browser_resolution";
-import {
-	PP_DEFAULT_PROFILE_NAME,
-	resolvePpProfileBrowserRuntimeDir,
-} from "../pp_state_paths";
+import { resolvePpProfileBrowserRuntimeDir } from "../pp_state_paths";
+import { resolveNavigatorManagedProfileName } from "../managed_profile";
 
 const normalizePlatform = (platform: NodeJS.Platform): string => {
 	switch (platform) {
@@ -79,19 +77,23 @@ export const resolveProfileRuntimeUserDataDir = ({
 export const resolveDefaultProfileRuntimeUserDataDir = ({
 	browser = NAVIGATOR_DEFAULT_BROWSER,
 	chromiumBin,
+	session,
 	env = process.env,
 	homeDir = os.homedir(),
 	platform = process.platform,
 }: {
 	browser?: NavigatorBrowser;
 	chromiumBin?: string;
+	session?: string;
 	env?: NodeJS.ProcessEnv;
 	homeDir?: string;
 	platform?: NodeJS.Platform;
 }): string =>
 	resolveProfileRuntimeUserDataDir({
 		browser,
-		profile: PP_DEFAULT_PROFILE_NAME,
+		profile: resolveNavigatorManagedProfileName({
+			session,
+		}),
 		chromiumBin,
 		env,
 		homeDir,

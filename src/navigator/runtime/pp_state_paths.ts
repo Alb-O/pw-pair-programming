@@ -112,6 +112,32 @@ export const resolvePpProfileBrowserRuntimeDir = ({
 		runtimePartition,
 	);
 
+export const resolvePpAuthDir = ({
+	env = process.env,
+	homeDir = os.homedir(),
+}: {
+	env?: NodeJS.ProcessEnv;
+	homeDir?: string;
+} = {}): string => path.resolve(resolvePpStateRoot({ env, homeDir }), "auth");
+
+export const resolvePpProfileAuthDir = ({
+	profile,
+	env = process.env,
+	homeDir = os.homedir(),
+}: {
+	profile: string;
+	env?: NodeJS.ProcessEnv;
+	homeDir?: string;
+}): string =>
+	path.resolve(
+		resolvePpProfileDir({
+			profile,
+			env,
+			homeDir,
+		}),
+		"auth",
+	);
+
 export const resolvePpRuntimeDir = ({
 	env = process.env,
 	homeDir = os.homedir(),

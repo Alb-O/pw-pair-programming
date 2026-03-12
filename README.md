@@ -38,7 +38,8 @@ export PP_BROWSER=chromium
 pp profile-path --profile "$PP_PROFILE"
 # log in once with the persistent profile behind that name
 pp login --profile "$PP_PROFILE"
-# optional: import/export storage state through pp's Playwright bridge
+# install/export auth state for the named pp profile
+# state-load stores a profile-scoped auth bootstrap that pp reapplies on open
 pp state-save --profile "$PP_PROFILE" ./chatgpt.state.json
 pp state-load --profile "$PP_PROFILE" ./chatgpt.state.json
 

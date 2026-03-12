@@ -426,6 +426,18 @@ test("parseArgs parses pp state-load/state-save file arguments", () => {
 	assert.equal(save.options.outputPath, "./chatgpt.state.json");
 });
 
+test("parseArgs keeps auth bootstrap file on pp commands", () => {
+	const parsed = parseArgs([
+		"send",
+		"hello",
+		"--auth-file",
+		"./chatgpt.state.json",
+	]);
+
+	assert.equal(parsed.kind, "pp-send");
+	assert.equal(parsed.options.authFile, "./chatgpt.state.json");
+});
+
 test("navigator aliases are removed from parseArgs surface", () => {
 	assert.throws(
 		() => parseArgs(["navigator-send", "--message", "hello"]),
@@ -473,13 +485,6 @@ test("legacy auth-listen command is rejected", () => {
 
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /unknown command 'auth-listen'/);
-});
-
-test("pp send rejects removed --auth-file option", () => {
-	const result = runCli(["send", "hello", "--auth-file", "/tmp/auth.json"]);
-
-	assert.equal(result.status, 1);
-	assert.match(result.stderr, /unknown option '--auth-file'/);
 });
 
 test("pp state-load requires a file path", () => {

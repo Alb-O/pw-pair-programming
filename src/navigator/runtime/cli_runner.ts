@@ -82,6 +82,11 @@ import {
 	type ReusableSessionLaunchIdentity,
 	type ReusableSessionState,
 } from "./chatgpt_session/reusable_session_state";
+import {
+	readAuthStorageState,
+	resolveDefaultAuthBootstrapFile,
+	resolveProfileAuthBootstrapFile,
+} from "./chatgpt_session/auth_bootstrap";
 import { acquirePpCommandLock, releasePpCommandLock } from "./command_lock";
 import { resolveNavigatorManagedProfileName } from "./managed_profile";
 import { resolvePpRuntimeDir } from "./pp_state_paths";
@@ -98,6 +103,7 @@ export type NavigatorConnectionOptions = {
 	userDataDir?: string;
 	profile?: string;
 	session?: string;
+	authFile?: string;
 	headless: boolean;
 	chatUrl: string;
 	project?: string;
@@ -968,6 +974,7 @@ const withNavigatorSession = async <T>(
 				userDataDir: connection.userDataDir,
 				profile: connection.profile,
 				session: connection.session,
+				authFile: connection.authFile,
 				headless: connection.headless,
 				targetUrl: openTargetUrl,
 				navigate: shouldNavigate(connection, mode),
@@ -1414,34 +1421,39 @@ export const runPpLogin = async (options: NavigatorLoginOptions) => {
 };
 
 export const runPpStateLoad = async (options: NavigatorStateLoadOptions) => {
-	const resolved = resolvePwCliBridgeMetadata(options);
 	const inputPath = path.resolve(options.inputPath);
 	if (!fs.existsSync(inputPath)) {
 		throw new Error(`state file does not exist: ${inputPath}`);
 	}
-
-	runPwCliProfileOpen({
-		connection: options,
-		headed: false,
-	});
-	try {
-		runPwCliBridge({
-			connection: options,
-			args: ["state-load", inputPath],
-		});
-		runPwCliBridge({
-			connection: options,
-			args: ["reload"],
-		});
-	} finally {
-		try {
-			runPwCliClose(options);
-		} catch {}
+	if (isNonEmpty(options.cdpUrl)) {
+		throw new Error("pp state-load does not support --cdp-url; use a named profile");
 	}
+	if (isNonEmpty(options.userDataDir)) {
+		throw new Error(
+			"pp state-load does not support --user-data-dir; use a named profile",
+		);
+	}
+	const profile = resolveNavigatorManagedProfileName({
+		profile: options.profile,
+		session: options.session,
+	});
+	const installedPath = resolveProfileAuthBootstrapFile({
+		profile,
+		targetUrl: options.chatUrl,
+	});
+	if (!isNonEmpty(installedPath)) {
+		throw new Error(`failed to resolve auth bootstrap path for ${options.chatUrl}`);
+	}
+	readAuthStorageState(inputPath);
+	fs.mkdirSync(path.dirname(installedPath), { recursive: true });
+	fs.copyFileSync(inputPath, installedPath);
+	const resolved = resolvePwCliBridgeMetadata(options);
 
 	return {
 		loaded: true,
 		input_path: inputPath,
+		auth_file: installedPath,
+		profile,
 		browser: resolved.browser,
 		user_data_dir: resolved.userDataDir,
 		pw_cli_session: resolved.pwCliSession,
@@ -1502,6 +1514,19 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 		const chromiumLaunchProfile = resolveNavigatorChromiumLaunchProfile({
 			chromiumLaunchProfile: options.chromiumLaunchProfile,
 		});
+		const authFile =
+			isNonEmpty(options.authFile)
+				? path.resolve(options.authFile)
+				: resolveDefaultAuthBootstrapFile({
+						targetUrl: options.chatUrl,
+						profile:
+							isNonEmpty(options.userDataDir) || isNonEmpty(options.cdpUrl)
+								? undefined
+								: resolveNavigatorManagedProfileName({
+										profile: options.profile,
+										session: options.session,
+									}),
+					}) ?? null;
 		return {
 			workspace: process.cwd(),
 			env_project_var: NAVIGATOR_PROJECT_ENV,
@@ -1573,6 +1598,7 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 				user_data_dir: options.userDataDir ?? null,
 				profile: options.profile ?? null,
 				session: options.session ?? null,
+				auth_file: options.authFile ?? null,
 				headless: options.headless,
 				chat_url: options.chatUrl,
 				target_url: targetUrl,
@@ -1583,6 +1609,7 @@ export const runPpIsolate = async (options: NavigatorIsolateOptions) =>
 				isNonEmpty(options.cdpUrl)
 					? null
 					: resolveManagedProfileUserDataDir(options),
+			auth_file: authFile,
 			pw_cli_session:
 				isNonEmpty(options.cdpUrl)
 					? null

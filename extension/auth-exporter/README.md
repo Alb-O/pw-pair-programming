@@ -37,6 +37,10 @@ pp state-load --profile "$PP_PROFILE" ./chatgpt_com.state.json
 pp send --profile "$PP_PROFILE" "Reply with AUTH_OK"
 ```
 
+`pp state-load` installs the JSON as a profile-scoped auth bootstrap file.
+Later `pp --profile "$PP_PROFILE" ...` commands reapply that auth when opening
+the session.
+
 If you need the real browser user-data-dir for debugging, run:
 
 ```bash

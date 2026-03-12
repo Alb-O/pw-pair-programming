@@ -30,6 +30,10 @@ import {
 	reusableSessionMatchesLaunch,
 	saveReusableSessionState,
 } from "./chatgpt_session/reusable_session_state";
+import {
+	applyAuthStorageStateToContext,
+	resolveDefaultAuthBootstrapFile,
+} from "./chatgpt_session/auth_bootstrap";
 import { profileUserDataDir } from "../profile/profile_env";
 import { parseProjectId } from "../project/project_ref";
 import { resolveNavigatorManagedProfileName } from "./managed_profile";
@@ -321,6 +325,28 @@ export const shouldNavigateToTargetUrl = ({
 	return currentUrl !== targetUrl;
 };
 
+export const shouldReloadTargetAfterAuthBootstrap = ({
+	navigate,
+	currentUrl,
+	targetUrl,
+	authBootstrapApplied,
+}: {
+	navigate: boolean;
+	currentUrl: string;
+	targetUrl: string;
+	authBootstrapApplied: boolean;
+}): boolean => {
+	if (!navigate || !authBootstrapApplied || !isNonEmpty(currentUrl)) {
+		return false;
+	}
+	const currentComparable = comparableUrl(currentUrl);
+	const targetComparable = comparableUrl(targetUrl);
+	if (currentComparable !== undefined && targetComparable !== undefined) {
+		return currentComparable === targetComparable;
+	}
+	return currentUrl === targetUrl;
+};
+
 type SessionSource =
 	| {
 			kind: "cdp";
@@ -397,6 +423,7 @@ const openViaContext = async ({
 	context,
 	targetUrl,
 	strictTabTargeting,
+	authBootstrapFile,
 	ownership,
 	freshLaunch,
 	close,
@@ -404,6 +431,7 @@ const openViaContext = async ({
 	context: RuntimeContext;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
+	authBootstrapFile?: string;
 	ownership: SessionOwnership;
 	freshLaunch: boolean;
 	close: () => Promise<void>;
@@ -424,6 +452,13 @@ const openViaContext = async ({
 	if (page === undefined) {
 		page = await context.newPage();
 	}
+	if (isNonEmpty(authBootstrapFile)) {
+		await applyAuthStorageStateToContext({
+			context,
+			page,
+			authFile: authBootstrapFile,
+		});
+	}
 	if (freshLaunch) {
 		await closeNonSelectedStartupJunkPages({
 			context,
@@ -443,6 +478,7 @@ const openViaBrowser = async ({
 	browser,
 	targetUrl,
 	strictTabTargeting,
+	authBootstrapFile,
 	ownership,
 	freshLaunch,
 	close,
@@ -450,6 +486,7 @@ const openViaBrowser = async ({
 	browser: RuntimeBrowser;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
+	authBootstrapFile?: string;
 	ownership: SessionOwnership;
 	freshLaunch: boolean;
 	close: () => Promise<void>;
@@ -462,6 +499,7 @@ const openViaBrowser = async ({
 		context,
 		targetUrl,
 		strictTabTargeting,
+		authBootstrapFile,
 		ownership,
 		freshLaunch,
 		close,
@@ -472,16 +510,19 @@ const openViaCdp = async ({
 	cdpUrl,
 	targetUrl,
 	strictTabTargeting,
+	authBootstrapFile,
 }: {
 	cdpUrl: string;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
+	authBootstrapFile?: string;
 }): Promise<ChatgptSession> => {
 	const browser = await chromium.connectOverCDP(cdpUrl);
 	return openViaBrowser({
 		browser,
 		targetUrl,
 		strictTabTargeting,
+		authBootstrapFile,
 		ownership: "external",
 		freshLaunch: false,
 		close: async () => {},
@@ -497,6 +538,7 @@ const openViaReusableProfile = async ({
 	headless,
 	targetUrl,
 	strictTabTargeting,
+	authBootstrapFile,
 }: {
 	chromiumBin: string;
 	chromiumLaunchProfile: NavigatorChromiumLaunchProfile;
@@ -506,6 +548,7 @@ const openViaReusableProfile = async ({
 	headless: boolean;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
+	authBootstrapFile?: string;
 }): Promise<ChatgptSession> => {
 	const stateTargetUrl = targetUrl ?? DEFAULT_CHAT_URL;
 	const launchIdentity = {
@@ -525,11 +568,12 @@ const openViaReusableProfile = async ({
 		reusableSessionMatchesLaunch(persisted, launchIdentity)
 	) {
 		try {
-				return await openViaCdp({
-					cdpUrl: persisted.cdpUrl,
-					targetUrl,
-					strictTabTargeting,
-				});
+			return await openViaCdp({
+				cdpUrl: persisted.cdpUrl,
+				targetUrl,
+				strictTabTargeting,
+				authBootstrapFile,
+			});
 		} catch {
 			clearReusableSessionState({
 				targetUrl: stateTargetUrl,
@@ -556,13 +600,14 @@ const openViaReusableProfile = async ({
 			chromiumLaunchProfile,
 			session,
 		});
-			return await openViaBrowser({
-				browser: launched.browser,
-				targetUrl,
-				strictTabTargeting,
-				ownership: "external",
-				freshLaunch: true,
-				close: async () => {},
+		return await openViaBrowser({
+			browser: launched.browser,
+			targetUrl,
+			strictTabTargeting,
+			authBootstrapFile,
+			ownership: "external",
+			freshLaunch: true,
+			close: async () => {},
 		});
 	} catch (error) {
 		clearReusableSessionState({
@@ -583,6 +628,7 @@ const openViaPersistentProfileFirefox = async ({
 	headless,
 	targetUrl,
 	strictTabTargeting,
+	authBootstrapFile,
 	allowProfileResetOnLaunchFailure = false,
 }: {
 	firefoxBin?: string;
@@ -590,6 +636,7 @@ const openViaPersistentProfileFirefox = async ({
 	headless: boolean;
 	targetUrl?: string;
 	strictTabTargeting?: boolean;
+	authBootstrapFile?: string;
 	allowProfileResetOnLaunchFailure?: boolean;
 }): Promise<ChatgptSession> => {
 	const launchContext = async (): Promise<RuntimeContext> =>
@@ -613,13 +660,14 @@ const openViaPersistentProfileFirefox = async ({
 		context = await launchContext();
 	}
 	try {
-			return await openViaContext({
-				context,
-				targetUrl,
-				strictTabTargeting,
-				ownership: "managed",
-				freshLaunch: true,
-				close: async () => {
+		return await openViaContext({
+			context,
+			targetUrl,
+			strictTabTargeting,
+			authBootstrapFile,
+			ownership: "managed",
+			freshLaunch: true,
+			close: async () => {
 				await context.close();
 			},
 		});
@@ -637,6 +685,7 @@ export const openChatgptSession = async ({
 	userDataDir,
 	profile,
 	session: sessionName,
+	authFile,
 	headless = false,
 	targetUrl = DEFAULT_CHAT_URL,
 	navigate = true,
@@ -662,6 +711,17 @@ export const openChatgptSession = async ({
 		profile,
 		session: sessionName,
 	});
+	const discoveredAuthFile =
+		isNonEmpty(authFile)
+			? path.resolve(authFile)
+			: resolveDefaultAuthBootstrapFile({
+					targetUrl,
+					profile:
+						sessionSource.kind === "profile"
+							? sessionSource.profileName
+							: undefined,
+				});
+	const authBootstrapApplied = isNonEmpty(discoveredAuthFile);
 	const session = await (() => {
 		switch (sessionSource.kind) {
 			case "cdp":
@@ -669,6 +729,7 @@ export const openChatgptSession = async ({
 					cdpUrl: sessionSource.cdpUrl,
 					targetUrl,
 					strictTabTargeting,
+					authBootstrapFile: discoveredAuthFile,
 				});
 			case "profile": {
 				const profileChromiumBin =
@@ -700,6 +761,7 @@ export const openChatgptSession = async ({
 						headless,
 						targetUrl,
 						strictTabTargeting,
+						authBootstrapFile: discoveredAuthFile,
 					})
 					: openViaPersistentProfileFirefox({
 						firefoxBin: profileFirefoxBin,
@@ -707,6 +769,7 @@ export const openChatgptSession = async ({
 						headless,
 						targetUrl,
 						strictTabTargeting,
+						authBootstrapFile: discoveredAuthFile,
 						allowProfileResetOnLaunchFailure:
 							sessionSource.profileName !== undefined,
 					});
@@ -714,15 +777,21 @@ export const openChatgptSession = async ({
 		}
 	})();
 	try {
-			if (
-				shouldNavigateToTargetUrl({
-					navigate,
-					currentUrl: session.page.url(),
-					targetUrl,
-					preserveProjectConversation,
-				})
-			) {
-				await session.page.goto(targetUrl, { waitUntil: "domcontentloaded" });
+		if (
+			shouldNavigateToTargetUrl({
+				navigate,
+				currentUrl: session.page.url(),
+				targetUrl,
+				preserveProjectConversation,
+			}) ||
+			shouldReloadTargetAfterAuthBootstrap({
+				navigate,
+				currentUrl: session.page.url(),
+				targetUrl,
+				authBootstrapApplied,
+			})
+		) {
+			await session.page.goto(targetUrl, { waitUntil: "domcontentloaded" });
 		}
 
 		if (ensureComposer) {

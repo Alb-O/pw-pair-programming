@@ -93,7 +93,7 @@ export const PP_COMMAND_USAGE_LINES = [
 ] as const;
 
 export const CONNECTION_USAGE_LINES = [
-	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--session <name>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
+	`  [--browser <chromium|firefox>] [--chromium-launch-profile <low-detection|strict>] [--cdp-url <url>] [--chromium-bin <path>] [--user-data-dir <path>] [--profile <name>] [--session <name>] [--auth-file <path>] [--chat-url <url>] [--project <g-p-id-or-url>] [--headless] [--no-navigate] [--composer-timeout-ms <int>]`,
 	`  default project source: $${NAVIGATOR_PROJECT_ENV} when --project is not provided`,
 	`  default profile source: $${NAVIGATOR_PROFILE_ENV} when --user-data-dir and --profile are not provided`,
 	`  default session source: $${NAVIGATOR_SESSION_ENV} when --session is not provided`,
@@ -240,6 +240,7 @@ const applyConnectionOptions = (command: Command): void => {
 	command.option("--user-data-dir <path>");
 	command.option("--profile <name>");
 	command.option("--session <name>");
+	command.option("--auth-file <path>");
 	command.option("--chat-url <url>");
 	command.option("--project <g-p-id-or-url>");
 	command.option("--headless");
@@ -426,6 +427,10 @@ const parseNavigatorConnection = ({
 		userDataDir: explicitUserDataDir,
 		profile: profileBinding?.profile,
 		session: sessionBinding?.session,
+		authFile: readStringOption({
+			options,
+			key: "authFile",
+		}),
 		headless: readBooleanOption({
 			options,
 			key: "headless",
@@ -1454,9 +1459,7 @@ const runPpSubcommand = async (command: PpSubcommand): Promise<number> => {
 			if (command.json) {
 				printJson(result);
 			} else {
-				printText(
-					`Loaded ${result.input_path} into ${result.user_data_dir}`,
-				);
+				printText(`Installed ${result.input_path} as ${result.auth_file}`);
 			}
 			return 0;
 		}

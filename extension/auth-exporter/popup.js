@@ -1,17 +1,10 @@
 let domains = new Set();
-let connected = false;
-let authenticated = false;
 let currentTabDomain = null;
-let connectPending = false;
 
-const statusDot = document.getElementById("statusDot");
-const statusText = document.getElementById("statusText");
-const serverInput = document.getElementById("serverInput");
-const tokenInput = document.getElementById("tokenInput");
-const connectBtn = document.getElementById("connectBtn");
 const domainList = document.getElementById("domainList");
 const newDomainInput = document.getElementById("newDomain");
 const addDomainBtn = document.getElementById("addDomainBtn");
+const filenameInput = document.getElementById("filenameInput");
 const exportBtn = document.getElementById("exportBtn");
 const messageArea = document.getElementById("messageArea");
 
@@ -23,71 +16,60 @@ const extractDomain = (url) => {
 	}
 };
 
+const normalizeDomain = (value) => {
+	if (typeof value !== "string") {
+		return null;
+	}
+	const trimmed = value.trim().toLowerCase();
+	if (trimmed === "" || trimmed.includes(" ") || !trimmed.includes(".")) {
+		return null;
+	}
+	return trimmed.replace(/^\./, "");
+};
+
+const defaultFilenameForDomains = (selectedDomains) => {
+	if (selectedDomains.length === 1) {
+		return `${selectedDomains[0].replace(/[^a-z0-9]+/g, "_")}.state.json`;
+	}
+	return "playwright.state.json";
+};
+
 const saveDomains = () => {
 	chrome.storage.local.set({
 		pw_export_domains: [...domains],
 	});
 };
 
-const saveServer = () => {
+const saveFilename = () => {
 	chrome.storage.local.set({
-		pw_export_server: serverInput.value,
+		pw_export_filename: filenameInput.value,
 	});
 };
 
-const showMessage = (type, text, paths) => {
+const showMessage = (type, text) => {
 	messageArea.innerHTML = "";
 	const div = document.createElement("div");
 	div.className = `message ${type}`;
 	div.textContent = text;
-
-	if (Array.isArray(paths) && paths.length > 0) {
-		const pathsDiv = document.createElement("div");
-		pathsDiv.className = "paths";
-		pathsDiv.textContent = paths.join("\n");
-		div.appendChild(pathsDiv);
-	}
-
 	messageArea.appendChild(div);
 	if (type === "success") {
 		setTimeout(() => div.remove(), 5000);
 	}
 };
 
-const clearConnectingMessage = () => {
-	const message = messageArea.querySelector(".message.info");
-	if (
-		message !== null &&
-		typeof message.textContent === "string" &&
-		message.textContent.startsWith("Connecting")
-	) {
-		messageArea.innerHTML = "";
-	}
+const updateExportState = () => {
+	exportBtn.disabled = domains.size === 0;
 };
 
-const updateStatus = (isConnected, isAuthenticated) => {
-	connected = isConnected;
-	authenticated = isAuthenticated;
-	if (connectPending && (connected || authenticated)) {
-		connectPending = false;
-		clearConnectingMessage();
+const maybeRefreshFilename = () => {
+	const selectedDomains = [...domains];
+	if (
+		filenameInput.value.trim() === "" ||
+		filenameInput.dataset.autoName === "1"
+	) {
+		filenameInput.value = defaultFilenameForDomains(selectedDomains);
+		filenameInput.dataset.autoName = "1";
 	}
-
-	statusDot.className = "dot";
-	if (authenticated) {
-		statusDot.classList.add("authenticated");
-		statusText.textContent = "Connected + authenticated";
-		connectBtn.textContent = "Disconnect";
-	} else if (connected) {
-		statusDot.classList.add("connected");
-		statusText.textContent = "Connected (awaiting auth)";
-		connectBtn.textContent = "Disconnect";
-	} else {
-		statusText.textContent = "Not connected";
-		connectBtn.textContent = "Connect";
-	}
-
-	exportBtn.disabled = !(authenticated && domains.size > 0);
 };
 
 const renderDomains = () => {
@@ -99,7 +81,7 @@ const renderDomains = () => {
 		empty.style.padding = "6px 0";
 		empty.textContent = "No domains added";
 		domainList.appendChild(empty);
-		exportBtn.disabled = true;
+		updateExportState();
 		return;
 	}
 
@@ -124,6 +106,7 @@ const renderDomains = () => {
 		removeBtn.onclick = () => {
 			domains.delete(domain);
 			saveDomains();
+			maybeRefreshFilename();
 			renderDomains();
 		};
 
@@ -133,82 +116,37 @@ const renderDomains = () => {
 		domainList.appendChild(row);
 	}
 
-	exportBtn.disabled = !(authenticated && domains.size > 0);
-};
-
-const connect = () => {
-	if (connected) {
-		connectPending = false;
-		chrome.runtime.sendMessage(
-			{
-				type: "connect",
-				server: "",
-				token: "",
-			},
-			() => {
-				updateStatus(false, false);
-			},
-		);
-		return;
-	}
-
-	const server = serverInput.value.trim();
-	const token = tokenInput.value.trim();
-	if (server === "") {
-		showMessage("error", "Please enter server URL");
-		return;
-	}
-	if (token === "") {
-		showMessage("error", "Please enter token");
-		return;
-	}
-
-	saveServer();
-	showMessage("info", "Connecting...");
-	connectPending = true;
-
-	chrome.runtime.sendMessage(
-		{
-			type: "connect",
-			server,
-			token,
-		},
-		(response) => {
-			if (chrome.runtime.lastError) {
-				connectPending = false;
-				showMessage(
-					"error",
-					chrome.runtime.lastError.message || "Connect failed",
-				);
-				return;
-			}
-			if (response?.type === "error") {
-				connectPending = false;
-				showMessage("error", response.message || "Connect failed");
-				return;
-			}
-			updateStatus(
-				Boolean(response?.connected),
-				Boolean(response?.authenticated),
-			);
-		},
-	);
+	updateExportState();
 };
 
 const addDomain = () => {
 	const typed = newDomainInput.value.trim().toLowerCase();
-	const domain = typed === "" ? currentTabDomain : typed;
-	if (domain === null || domain === "") {
-		return;
-	}
-	if (!domain.includes(".") || domain.includes(" ")) {
+	const candidate = typed === "" ? currentTabDomain : typed;
+	const domain = normalizeDomain(candidate);
+	if (domain === null) {
 		showMessage("error", "Invalid domain format");
 		return;
 	}
 	domains.add(domain);
 	newDomainInput.value = "";
 	saveDomains();
+	maybeRefreshFilename();
 	renderDomains();
+};
+
+const downloadStorageState = (filename, storageState) => {
+	const jsonText = `${JSON.stringify(storageState, null, 2)}\n`;
+	const blob = new Blob([jsonText], { type: "application/json" });
+	const url = URL.createObjectURL(blob);
+	const anchor = document.createElement("a");
+	anchor.href = url;
+	anchor.download = filename;
+	document.body.appendChild(anchor);
+	anchor.click();
+	anchor.remove();
+	setTimeout(() => {
+		URL.revokeObjectURL(url);
+	}, 1_000);
 };
 
 const exportSelectedDomains = () => {
@@ -221,26 +159,59 @@ const exportSelectedDomains = () => {
 		return;
 	}
 
+	const filename = filenameInput.value.trim() || defaultFilenameForDomains(selected);
 	showMessage("info", `Exporting cookies for ${selected.length} domain(s)...`);
-	chrome.runtime.sendMessage({
-		type: "export",
-		domains: selected,
-	});
+	chrome.runtime.sendMessage(
+		{
+			type: "export",
+			domains: selected,
+		},
+		(response) => {
+			if (chrome.runtime.lastError) {
+				showMessage(
+					"error",
+					chrome.runtime.lastError.message || "Export failed",
+				);
+				return;
+			}
+			if (response?.type === "error") {
+				showMessage("error", response.message || "Export failed");
+				return;
+			}
+			if (
+				response?.type !== "export_result" ||
+				typeof response.storageState !== "object" ||
+				response.storageState === null
+			) {
+				showMessage("error", "Background worker returned invalid export data");
+				return;
+			}
+
+			downloadStorageState(filename, response.storageState);
+			showMessage(
+				"success",
+				`Downloaded ${filename}. Load it with: pw-cli state-load ${filename}`,
+			);
+		},
+	);
 };
 
 const init = async () => {
 	const stored = await chrome.storage.local.get([
 		"pw_export_domains",
-		"pw_export_server",
+		"pw_export_filename",
 	]);
 	if (Array.isArray(stored.pw_export_domains)) {
-		domains = new Set(stored.pw_export_domains);
+		domains = new Set(stored.pw_export_domains.map(normalizeDomain).filter(Boolean));
 	}
 	if (
-		typeof stored.pw_export_server === "string" &&
-		stored.pw_export_server !== ""
+		typeof stored.pw_export_filename === "string" &&
+		stored.pw_export_filename.trim() !== ""
 	) {
-		serverInput.value = stored.pw_export_server;
+		filenameInput.value = stored.pw_export_filename;
+		filenameInput.dataset.autoName = "0";
+	} else {
+		filenameInput.dataset.autoName = "1";
 	}
 
 	try {
@@ -249,62 +220,31 @@ const init = async () => {
 			currentWindow: true,
 		});
 		if (tab?.url) {
-			currentTabDomain = extractDomain(tab.url);
+			currentTabDomain = normalizeDomain(extractDomain(tab.url));
 			if (currentTabDomain) {
 				newDomainInput.placeholder = currentTabDomain;
+				if (domains.size === 0) {
+					domains.add(currentTabDomain);
+				}
 			}
 		}
 	} catch {
 		// ignore tab query failure
 	}
 
-	chrome.runtime.sendMessage(
-		{
-			type: "get_status",
-		},
-		(response) => {
-			if (chrome.runtime.lastError) {
-				showMessage("error", "Background worker not responding");
-				return;
-			}
-			updateStatus(
-				Boolean(response?.connected),
-				Boolean(response?.authenticated),
-			);
-		},
-	);
-
+	maybeRefreshFilename();
 	renderDomains();
 };
 
-chrome.runtime.onMessage.addListener((message) => {
-	if (message?.type === "status") {
-		updateStatus(Boolean(message.connected), Boolean(message.authenticated));
-		return;
-	}
-	if (message?.type === "export_result") {
-		if (message.success) {
-			showMessage(
-				"success",
-				`Saved cookies for ${message.domains_saved ?? 0} domain(s)`,
-				message.paths,
-			);
-		} else {
-			showMessage("error", message.error || "Export failed");
-		}
-		return;
-	}
-	if (message?.type === "error") {
-		showMessage("error", message.message || "Request failed");
-	}
-});
-
-connectBtn.onclick = connect;
 addDomainBtn.onclick = addDomain;
 newDomainInput.onkeydown = (event) => {
 	if (event.key === "Enter") {
 		addDomain();
 	}
+};
+filenameInput.oninput = () => {
+	filenameInput.dataset.autoName = "0";
+	saveFilename();
 };
 exportBtn.onclick = exportSelectedDomains;
 

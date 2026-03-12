@@ -1,6 +1,6 @@
 # PP Auth Exporter Extension
 
-Chrome extension that exports cookies to the local `pp` auth listener.
+Chrome extension that exports cookies as Playwright `storageState` JSON.
 
 ## Load Extension
 
@@ -9,46 +9,37 @@ Chrome extension that exports cookies to the local `pp` auth listener.
 3. Click load unpacked.
 4. Select `extension/auth-exporter`.
 
-## Run Listener
-
-```bash
-devenv shell bash -lc '
-npm run build
-node dist/cli.js auth-listen
-'
-```
-
-Listener output includes:
-
-- WebSocket URL (default `ws://127.0.0.1:9271/`)
-- One-time token
-- Target auth directory
-
 ## Export Cookies
 
 1. Open the extension popup.
-2. Paste the token from `auth-listen`.
-3. Add/select domains (the current tab hostname is prefilled).
-4. Click export cookies.
+2. Add/select domains. The current tab hostname is prefilled.
+3. Click `Download storageState JSON`.
+4. Save the downloaded file, for example `chatgpt_com.state.json`.
 
-Saved files are Playwright storage state JSON files:
+The downloaded file is Playwright storage state JSON with this shape:
 
-- `<auth-dir>/<domain_with_underscores>.json`
-
-Example:
-
-- `~/.config/pp/auth/chatgpt_com.json`
+```json
+{
+  "cookies": [],
+  "origins": []
+}
+```
 
 ## Use Exported Auth State
 
-You can pass exported auth directly to navigator commands:
+Load it into a Playwright-backed persistent profile with `pw-cli`:
 
 ```bash
-devenv shell bash -lc '
-CHROMIUM_BIN=$(command -v chromium)
-node dist/cli.js send \
-  --chromium-bin "$CHROMIUM_BIN" \
-  --auth-file ~/.config/pp/auth/chatgpt_com.json \
-  "Reply with AUTH_OK"
-'
+export PP_PROFILE=chatgpt-profile
+export PP_USER_DATA_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/pp/profiles/${PP_PROFILE}/browser-state/v1/linux"
+
+pw-cli open https://chatgpt.com --headed --persistent --profile "$PP_USER_DATA_DIR"
+pw-cli state-load ./chatgpt_com.state.json
+pw-cli reload
+pw-cli close
+
+pp send --profile "$PP_PROFILE" "Reply with AUTH_OK"
 ```
+
+You can also import/export the same file with Playwright code using
+`browser.newContext({ storageState })` and `context.storageState({ path })`.
